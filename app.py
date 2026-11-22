@@ -1,5 +1,4 @@
 import joblib
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -19,7 +18,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Hafif kurumsal stil dokunuşları
 st.markdown(
     """
     <style>
@@ -32,13 +30,6 @@ st.markdown(
             border: 1px solid rgba(28, 131, 225, 0.18);
             padding: 0.85rem 1rem;
             border-radius: 0.65rem;
-        }
-        .panel-kutu {
-            border: 1px solid rgba(128, 128, 128, 0.22);
-            border-radius: 0.75rem;
-            padding: 1.1rem 1.25rem;
-            margin-bottom: 1rem;
-            background-color: rgba(250, 250, 252, 0.02);
         }
     </style>
     """,
@@ -82,7 +73,7 @@ KOD_SOZLUKLERI = {
     "sayac_tipi": SAYAC_TIPI_MAP,
 }
 
-# Görsel kıyas için referans medyan değerler (kendi veri analizinizle uyumlu)
+# Görsel kıyas için referans medyan değerler
 REFERANS_TUKETIM = {
     "normal_yaz": 14.8,
     "normal_kis": 11.0,
@@ -127,30 +118,6 @@ def varsayilan_satir_olustur() -> dict:
     return satir
 
 
-def tuketim_kiyas_grafigi(yaz_val: float, kis_val: float):
-    kategoriler = ["Yaz Tüketimi (m³)", "Kış Tüketimi (m³)"]
-    girilen = [yaz_val, kis_val]
-    normal_ref = [REFERANS_TUKETIM["normal_yaz"], REFERANS_TUKETIM["normal_kis"]]
-    riskli_ref = [REFERANS_TUKETIM["riskli_yaz"], REFERANS_TUKETIM["riskli_kis"]]
-
-    x = np.arange(len(kategoriler))
-    genislik = 0.25
-
-    fig, ax = plt.subplots(figsize=(5.6, 3.0))
-    ax.bar(x - genislik, girilen, width=genislik, label="Girilen Abone", color="#2563eb")
-    ax.bar(x, normal_ref, width=genislik, label="Normal Profil (Medyan)", color="#16a34a", alpha=0.85)
-    ax.bar(x + genislik, riskli_ref, width=genislik, label="Kaçak Şüphe Profili", color="#dc2626", alpha=0.85)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(kategoriler, fontsize=9)
-    ax.set_ylabel("Tüketim (m³)", fontsize=9)
-    ax.set_title("Dönemsel Tüketim Profil Kıyaslaması", fontsize=10, fontweight="bold")
-    ax.grid(axis="y", linestyle="--", alpha=0.3)
-    ax.legend(frameon=False, fontsize=8, loc="upper right")
-    plt.tight_layout()
-    return fig
-
-
 # Üst Başlık Bandı
 bas_sol, bas_sag = st.columns([3, 1])
 with bas_sol:
@@ -162,7 +129,7 @@ with bas_sag:
 
 st.divider()
 
-# Ana İki Sütunlu Ekran: Sol Girdi Paneli, Sağ Sonuç & Görselleştirme
+# Ana İki Sütunlu Ekran
 sol_panel, sag_panel = st.columns([1.05, 1.35], gap="large")
 
 girdiler = {}
@@ -173,22 +140,22 @@ with sol_panel:
 
     col_s1, col_s2, col_s3 = st.columns(3)
     if col_s1.button("🔴 Yüksek Risk", use_container_width=True):
-        st.session_state["tuketim_yaz_m3"] = 4.5
-        st.session_state["tuketim_kis_m3"] = 3.0
-        st.session_state["sayac_yasi"] = 16
+        st.session_state["tuketim_yaz_m3"] = 2.5
+        st.session_state["tuketim_kis_m3"] = 1.5
+        st.session_state["sayac_yasi"] = 17
         st.session_state["abone_tipi"] = "Tarım-Hayvancılık"
         st.session_state["sayac_tipi"] = "Mekanik"
 
     if col_s2.button("🟡 Orta Risk", use_container_width=True):
-        st.session_state["tuketim_yaz_m3"] = 9.0
-        st.session_state["tuketim_kis_m3"] = 7.0
+        st.session_state["tuketim_yaz_m3"] = 8.5
+        st.session_state["tuketim_kis_m3"] = 6.5
         st.session_state["sayac_yasi"] = 11
         st.session_state["abone_tipi"] = "Konut"
         st.session_state["sayac_tipi"] = "Mekanik"
 
     if col_s3.button("🟢 Düşük Risk", use_container_width=True):
-        st.session_state["tuketim_yaz_m3"] = 16.5
-        st.session_state["tuketim_kis_m3"] = 12.0
+        st.session_state["tuketim_yaz_m3"] = 17.5
+        st.session_state["tuketim_kis_m3"] = 13.0
         st.session_state["sayac_yasi"] = 3
         st.session_state["abone_tipi"] = "Konut"
         st.session_state["sayac_tipi"] = "Akıllı"
@@ -311,12 +278,25 @@ with sag_panel:
     if notlar:
         st.caption("**Öne çıkan sinyaller:** " + " • ".join(notlar))
 
-    fig_kiyas = tuketim_kiyas_grafigi(
-        float(girdiler.get("tuketim_yaz_m3", 0)),
-        float(girdiler.get("tuketim_kis_m3", 0)),
+    st.markdown("**Dönemsel Tüketim Profil Kıyaslaması (m³)**")
+    df_kiyas = pd.DataFrame(
+        {
+            "Girilen Abone": [
+                float(girdiler.get("tuketim_yaz_m3", 0)),
+                float(girdiler.get("tuketim_kis_m3", 0)),
+            ],
+            "Normal Profil": [
+                REFERANS_TUKETIM["normal_yaz"],
+                REFERANS_TUKETIM["normal_kis"],
+            ],
+            "Kaçak Şüphe Profili": [
+                REFERANS_TUKETIM["riskli_yaz"],
+                REFERANS_TUKETIM["riskli_kis"],
+            ],
+        },
+        index=["Yaz Tüketimi (m³)", "Kış Tüketimi (m³)"],
     )
-    st.pyplot(fig_kiyas, use_container_width=True)
-    plt.close(fig_kiyas)
+    st.bar_chart(df_kiyas, use_container_width=True)
 
     with st.expander("Modele gönderilen sayısal kod ve girdi özeti"):
         st.json({ETIKETLER.get(k, k): v for k, v in girdiler.items()})
