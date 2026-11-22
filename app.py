@@ -494,4 +494,183 @@ st.markdown(
 )
 
 # Üst KPI Şeridi
-k1, k2, k3, k4 = st.columns(4, gap="medium
+k1, k2, k3, k4 = st.columns(4, gap="medium")
+k1.markdown(
+    f"""
+    <div class="kpi-card">
+        <div class="kpi-label">Karar Eşiği</div>
+        <div class="kpi-value">%{yuksek_esik * 100:.0f}</div>
+        <div class="kpi-hint">Yüksek öncelikli saha barajı</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+k2.markdown(
+    f"""
+    <div class="kpi-card">
+        <div class="kpi-label">Test F1 Skoru</div>
+        <div class="kpi-value">{test_f1:.4f}</div>
+        <div class="kpi-hint">Doğrulanmış Random Forest modeli</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+k3.markdown(
+    """
+    <div class="kpi-card">
+        <div class="kpi-label">Birincil Sinyal</div>
+        <div class="kpi-value">Kış & Hane</div>
+        <div class="kpi-hint">En yüksek ayrım gücü sağlayan ikili</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+k4.markdown(
+    """
+    <div class="kpi-card">
+        <div class="kpi-label">Operasyon Modu</div>
+        <div class="kpi-value">Canlı Puanlama</div>
+        <div class="kpi-hint">Anlık risk skoru ve saha önerisi</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("<div style='height:0.65rem;'></div>", unsafe_allow_html=True)
+
+sol_panel, sag_panel = st.columns([0.96, 1.44], gap="large")
+
+girdiler = {}
+secilen_etiketler = {}
+
+with sol_panel:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown('<div class="panel-title">1. Abone Bilgileri ve Hazır Senaryolar</div>', unsafe_allow_html=True)
+
+    col_s1, col_s2, col_s3 = st.columns(3, gap="small")
+    if col_s1.button("🔴 Yüksek Risk", use_container_width=True):
+        senaryo_uygula(1.5, 6, 3.0, 17, ["Tarım-Hayvancılık", "Sanayi", "İşyeri"])
+
+    if col_s2.button("🟡 Orta Risk", use_container_width=True):
+        senaryo_uygula(6.5, 4, 9.0, 11, ["Konut", "İşyeri"])
+
+    if col_s3.button("🟢 Düşük Risk", use_container_width=True):
+        senaryo_uygula(13.0, 3, 17.5, 3, ["Konut"])
+
+    st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
+
+    for col in ONEMLI_5_SUTUN:
+        if col not in beklenen_sutunlar:
+            continue
+        baslik = ETIKETLER.get(col, col)
+        meta = ornek_degerler.get(col, {})
+
+        if col == "abone_tipi":
+            secenekler = [
+                str(x)
+                for x in (
+                    meta.get("secenekler")
+                    or ["Konut", "Tarım-Hayvancılık", "İşyeri", "Resmi", "Sanayi"]
+                )
+            ]
+            mevcut = str(st.session_state.get(col, secenekler[0]))
+            idx = secenekler.index(mevcut) if mevcut in secenekler else 0
+            secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
+            girdiler[col] = secilen
+            secilen_etiketler[col] = secilen
+
+        elif meta.get("tip") == "kat":
+            secenekler = [str(x) for x in meta.get("secenekler", [])] or ["Varsayılan"]
+            mevcut = str(st.session_state.get(col, secenekler[0]))
+            idx = secenekler.index(mevcut) if mevcut in secenekler else 0
+            secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
+            girdiler[col] = secilen
+            secilen_etiketler[col] = secilen
+
+        else:
+            is_int = bool(meta.get("is_int", False))
+            min_v = meta.get("min", 0)
+            max_v = meta.get("max", 1000)
+            med_v = meta.get("medyan", 10)
+
+            if is_int:
+                varsayilan_val = int(st.session_state.get(col, round(med_v)))
+                val = st.number_input(
+                    baslik,
+                    min_value=int(min_v),
+                    max_value=int(max_v),
+                    value=max(int(min_v), min(int(max_v), varsayilan_val)),
+                    step=1,
+                    key=f"inp_{col}",
+                )
+            else:
+                varsayilan_val = float(st.session_state.get(col, round(float(med_v), 2)))
+                val = st.number_input(
+                    baslik,
+                    min_value=round(float(min_v), 2),
+                    max_value=round(float(max_v), 2),
+                    value=max(round(float(min_v), 2), min(round(float(max_v), 2), varsayilan_val)),
+                    step=0.5,
+                    key=f"inp_{col}",
+                )
+            girdiler[col] = val
+            secilen_etiketler[col] = val
+
+    st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
+    tahmin_basildi = st.button("🚀 Risk Skorunu Hesapla", type="primary", use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with sag_panel:
+    tam_satir = varsayilan_satir_olustur()
+    tam_satir.update(girdiler)
+    df_model = pd.DataFrame([tam_satir])[beklenen_sutunlar]
+    olas = float(pipe.predict_proba(df_model)[:, 1][0])
+
+    if olas >= yuksek_esik:
+        risk_etiket = "Yüksek Risk"
+        rozet_html = '<span class="rozet-yuksek">● YÜKSEK RİSK — ÖNCELİKLİ SAHA</span>'
+        karar_class = "karar-yuksek"
+        aksiyon = "Öncelikli saha denetimi, sayaç bağlantısı ve hat/mühür kontrolü önerilir."
+        kontrol_maddeleri = [
+            "Düşük kış/yaz tüketimi ve hane büyüklüğü uyumsuzluğunun yerinde kontrolü",
+            "Sayaç önü bağlantı, mühür ve olası by-pass / hat müdahalesi incelemesi",
+            "Sayaç yaşı ve abone grubu dikkate alınarak sahada tüketim doğrulaması",
+        ]
+    elif olas >= orta_esik:
+        risk_etiket = "Orta Risk"
+        rozet_html = '<span class="rozet-orta">● ORTA RİSK — İZLEME LİSTESİ</span>'
+        karar_class = "karar-orta"
+        aksiyon = "İzleme listesine alınıp saha ekibi kapasitesine göre ikincil kontrol planlanabilir."
+        kontrol_maddeleri = [
+            "Önümüzdeki okuma döneminde tüketim ve hane profili sapmasının takibi",
+            "Sayaç yaşı ve abone tipine göre rutin kontrol planına dahil etme",
+        ]
+    else:
+        risk_etiket = "Düşük Risk"
+        rozet_html = '<span class="rozet-dusuk">● DÜŞÜK RİSK — OLAĞAN PROFİL</span>'
+        karar_class = "karar-dusuk"
+        aksiyon = "Ek saha müdahalesi gerektirmeyen olağan tüketim profili."
+        kontrol_maddeleri = [
+            "Olağan periyodik sayaç okuma ve faturalandırma akışı sürdürülür",
+        ]
+
+    if tahmin_basildi:
+        st.session_state["sorgu_gecmisi"].insert(
+            0,
+            {
+                "Abone Tipi": secilen_etiketler.get("abone_tipi", "-"),
+                "Kış (m³)": secilen_etiketler.get("tuketim_kis_m3", "-"),
+                "Hane": secilen_etiketler.get("hane_buyuklugu", "-"),
+                "Yaz (m³)": secilen_etiketler.get("tuketim_yaz_m3", "-"),
+                "Sayaç Yaşı": secilen_etiketler.get("sayac_yasi", "-"),
+                "Risk (%)": round(olas * 100, 1),
+                "Kademe": risk_etiket,
+            },
+        )
+
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown('<div class="panel-title">2. Risk Skoru ve Saha Karar Özeti</div>', unsafe_allow_html=True)
+
+    g_sol, g_sag = st.columns([0.92, 1.28], gap="medium")
+    with g_sol:
+        st.plotly_chart(powerbi_risk_kadran(olas, orta_esik, yuksek_esik), use_
