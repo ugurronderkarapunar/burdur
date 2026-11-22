@@ -756,4 +756,5 @@ with sag_panel:
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="panel-title">3. Bölgesel Harita Görünümü — {secili_ilce
+    st.markdown(f'<div class="panel-title">3. Bölgesel Harita Görünümü — {secili_ilce}</div>', unsafe_allow_html=True)
+    harita_nesnesi = folium_ilce_haritasi(secili_ilce,
