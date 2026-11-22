@@ -378,4 +378,236 @@ def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> 
                 "bordercolor": "#cbd5e1",
                 "steps": [
                     {"range": [0, orta_pct], "color": "#dcfce7"},
-                    {"range
+                    {"range": [orta_pct, yuksek_pct], "color": "#fef3c7"},
+                    {"range": [yuksek_pct, 100], "color": "#fee2e2"},
+                ],
+                "threshold": {
+                    "line": {"color": "#dc2626", "width": 3},
+                    "thickness": 0.8,
+                    "value": yuksek_pct,
+                },
+            },
+        )
+    )
+    fig.update_layout(
+        height=260,
+        margin=dict(l=20, r=20, t=50, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font={"family": "Plus Jakarta Sans"},
+    )
+    return fig
+
+
+def risk_kademesi(p: float):
+    if p >= yuksek_esik:
+        return "Yüksek Risk", "yuksek"
+    if p >= orta_esik:
+        return "Orta Risk", "orta"
+    return "Düşük Risk", "dusuk"
+
+
+KARAR_METINLERI = {
+    "yuksek": ("Öncelikli saha kontrolü", "Abone için sayaç ve tesisat kontrolü öncelikli planlanmalı. Kaçak kullanım şüphesi yüksek."),
+    "orta": ("İzleme listesine al", "Tüketim davranışı izlenmeli. Sonraki okuma döneminde sapma sürerse saha kontrolüne alınabilir."),
+    "dusuk": ("Rutin takip", "Mevcut verilere göre belirgin bir kaçak şüphesi yok. Rutin sayaç okuma yeterli."),
+}
+
+# ------------------------------------------------------------------ #
+# Başlangıç değerleri
+# ------------------------------------------------------------------ #
+varsayilan = varsayilan_satir_olustur()
+
+ilce_secenekleri = [str(x) for x in ornek_degerler.get("ilce", {}).get("secenekler", [])] or list(ILCE_KOORDINATLARI.keys())
+abone_secenekleri = [str(x) for x in ornek_degerler.get("abone_tipi", {}).get("secenekler", [])] or ["Konut"]
+
+for col in ONEMLI_SUTUNLAR:
+    if col not in st.session_state:
+        st.session_state[col] = varsayilan.get(col, 0)
+
+if st.session_state["ilce"] not in ilce_secenekleri:
+    st.session_state["ilce"] = ilce_secenekleri[0]
+if st.session_state["abone_tipi"] not in abone_secenekleri:
+    st.session_state["abone_tipi"] = abone_secenekleri[0]
+
+st.session_state["tuketim_kis_m3"] = float(st.session_state["tuketim_kis_m3"])
+st.session_state["tuketim_yaz_m3"] = float(st.session_state["tuketim_yaz_m3"])
+st.session_state["hane_buyuklugu"] = int(st.session_state["hane_buyuklugu"])
+st.session_state["sayac_yasi"] = int(st.session_state["sayac_yasi"])
+
+if "son_sonuc" not in st.session_state:
+    st.session_state["son_sonuc"] = None
+
+# ------------------------------------------------------------------ #
+# Başlık
+# ------------------------------------------------------------------ #
+st.markdown(
+    """
+    <div class="hero-card">
+        <div class="hero-badge">BURDUR • SU ŞEBEKESİ</div>
+        <div class="hero-title">Kaçak Su Risk Analiz ve Saha Öncelik Paneli</div>
+        <p class="hero-sub">Abone tüketim davranışından kaçak şüphesi olasılığını hesaplar ve saha ekibi için öncelik önerir.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+k1, k2, k3 = st.columns(3)
+for kol, etiket, deger, ipucu in [
+    (k1, "Model Test F1", f"{test_f1:.3f}", "Test verisi üzerinde"),
+    (k2, "Yüksek Risk Eşiği", f"%{yuksek_esik * 100:.0f}", "Bu değer ve üstü: saha kontrolü"),
+    (k3, "Orta Risk Eşiği", f"%{orta_esik * 100:.0f}", "Bu değer ve üstü: izleme"),
+]:
+    kol.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-label">{etiket}</div>
+            <div class="kpi-value">{deger}</div>
+            <div class="kpi-hint">{ipucu}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.write("")
+
+sol, sag = st.columns([1, 1.2], gap="large")
+
+# ------------------------------------------------------------------ #
+# Sol: girdi paneli
+# ------------------------------------------------------------------ #
+with sol:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Abone Bilgileri</div>', unsafe_allow_html=True)
+
+        b1, b2 = st.columns(2)
+        b1.button(
+            "Normal abone örneği",
+            use_container_width=True,
+            on_click=senaryo_uygula,
+            args=(REFERANS_TUKETIM["normal_kis"], 4, REFERANS_TUKETIM["normal_yaz"], 5, ["Konut", "Mesken"]),
+        )
+        b2.button(
+            "Riskli abone örneği",
+            use_container_width=True,
+            on_click=senaryo_uygula,
+            args=(REFERANS_TUKETIM["riskli_kis"], 1, REFERANS_TUKETIM["riskli_yaz"], 15, ["Tarım-Hayvancılık", "Tarım", "Hayvancılık"]),
+        )
+
+        st.selectbox(ETIKETLER["ilce"], ilce_secenekleri, key="ilce")
+        st.selectbox(ETIKETLER["abone_tipi"], abone_secenekleri, key="abone_tipi")
+
+        c1, c2 = st.columns(2)
+        c1.number_input(ETIKETLER["tuketim_kis_m3"], min_value=0.0, max_value=500.0, step=0.5, key="tuketim_kis_m3")
+        c2.number_input(ETIKETLER["tuketim_yaz_m3"], min_value=0.0, max_value=500.0, step=0.5, key="tuketim_yaz_m3")
+
+        c3, c4 = st.columns(2)
+        c3.number_input(ETIKETLER["hane_buyuklugu"], min_value=1, max_value=30, step=1, key="hane_buyuklugu")
+        c4.number_input(ETIKETLER["sayac_yasi"], min_value=0, max_value=60, step=1, key="sayac_yasi")
+
+        hesapla = st.button("Riski Hesapla", type="primary", use_container_width=True)
+
+    if hesapla:
+        satir = dict(varsayilan)
+        for col in ONEMLI_SUTUNLAR:
+            satir[col] = st.session_state[col]
+        df = pd.DataFrame([satir])[beklenen_sutunlar]
+
+        try:
+            olasilik = float(pipe.predict_proba(df)[0, 1])
+        except Exception as e:
+            st.error(f"Tahmin sırasında hata oluştu: {e}")
+            st.stop()
+
+        etiket, seviye = risk_kademesi(olasilik)
+        sonuc = {
+            "ilce": st.session_state["ilce"],
+            "olasilik": olasilik,
+            "etiket": etiket,
+            "seviye": seviye,
+        }
+        st.session_state["son_sonuc"] = sonuc
+        st.session_state["sorgu_gecmisi"].append(
+            {
+                "İlçe": st.session_state["ilce"],
+                "Abone Tipi": st.session_state["abone_tipi"],
+                "Kış (m³)": st.session_state["tuketim_kis_m3"],
+                "Yaz (m³)": st.session_state["tuketim_yaz_m3"],
+                "Hane": st.session_state["hane_buyuklugu"],
+                "Sayaç Yaşı": st.session_state["sayac_yasi"],
+                "Risk (%)": round(olasilik * 100, 1),
+                "Kademe": etiket,
+            }
+        )
+
+# ------------------------------------------------------------------ #
+# Sağ: sonuç paneli
+# ------------------------------------------------------------------ #
+with sag:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Risk Sonucu</div>', unsafe_allow_html=True)
+        sonuc = st.session_state["son_sonuc"]
+
+        if sonuc is None:
+            st.info("Sol taraftan bilgileri girip 'Riski Hesapla' düğmesine bas.")
+        else:
+            st.plotly_chart(
+                powerbi_risk_kadran(sonuc["olasilik"], orta_esik, yuksek_esik),
+                use_container_width=True,
+            )
+            st.markdown(
+                f'<span class="rozet-{sonuc["seviye"]}">{sonuc["etiket"]}</span>',
+                unsafe_allow_html=True,
+            )
+            st.write("")
+            baslik, metin = KARAR_METINLERI[sonuc["seviye"]]
+            st.markdown(
+                f"""
+                <div class="karar-{sonuc['seviye']}">
+                    <div class="karar-baslik">{baslik}</div>
+                    <div class="karar-metin">{metin}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.write("")
+            harita = folium_ilce_haritasi(sonuc["ilce"], sonuc["olasilik"], sonuc["etiket"])
+            st_folium(harita, height=300, use_container_width=True, returned_objects=[])
+
+# ------------------------------------------------------------------ #
+# Alt: model etkisi + geçmiş
+# ------------------------------------------------------------------ #
+alt1, alt2 = st.columns([1, 1.2], gap="large")
+
+with alt1:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Modelde En Etkili Özellikler</div>', unsafe_allow_html=True)
+        etiketler_ozet = [x[0] for x in OZELLIK_ETKI_OZETI][::-1]
+        degerler_ozet = [x[1] for x in OZELLIK_ETKI_OZETI][::-1]
+        fig_bar = go.Figure(
+            go.Bar(x=degerler_ozet, y=etiketler_ozet, orientation="h", marker_color="#0e7490")
+        )
+        fig_bar.update_layout(
+            height=260,
+            margin=dict(l=10, r=10, t=10, b=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font={"family": "Plus Jakarta Sans", "color": "#0f172a"},
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+with alt2:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Sorgu Geçmişi</div>', unsafe_allow_html=True)
+        if st.session_state["sorgu_gecmisi"]:
+            gecmis_df = pd.DataFrame(st.session_state["sorgu_gecmisi"][::-1])
+            st.dataframe(gecmis_df, use_container_width=True, hide_index=True)
+            if st.button("Geçmişi temizle"):
+                st.session_state["sorgu_gecmisi"] = []
+                st.rerun()
+        else:
+            st.caption("Henüz sorgu yapılmadı.")
+
+st.markdown(
+    '<div class="footer-bar">Bu panel karar destek amaçlıdır; sentetik veriyle eğitilmiş bir modele dayanır. Saha kararı yetkili personelce verilmelidir.</div>',
+    unsafe_allow_html=True,
+)
