@@ -1,6 +1,7 @@
 import joblib
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 # scikit-learn 1.6.1 ile kaydedilmiş pipeline için uyumluluk yaması
@@ -22,14 +23,14 @@ st.markdown(
     """
     <style>
         .block-container {
-            padding-top: 1.3rem;
+            padding-top: 1.2rem;
             padding-bottom: 2.2rem;
-            max-width: 1280px;
+            max-width: 1300px;
         }
         .ust-banner {
             background: linear-gradient(120deg, #0f2942 0%, #155e75 65%, #0e7490 100%);
             color: #ffffff;
-            padding: 1.35rem 1.6rem;
+            padding: 1.3rem 1.6rem;
             border-radius: 14px;
             margin-bottom: 1.1rem;
             box-shadow: 0 8px 24px rgba(15, 41, 66, 0.14);
@@ -37,7 +38,7 @@ st.markdown(
         .ust-banner h1 {
             color: #ffffff !important;
             font-size: 1.65rem !important;
-            margin: 0 0 0.3rem 0 !important;
+            margin: 0 0 0.25rem 0 !important;
             font-weight: 700 !important;
         }
         .ust-banner p {
@@ -46,11 +47,11 @@ st.markdown(
             font-size: 0.95rem !important;
         }
         div[data-testid="stMetric"] {
-            background-color: #f8fafc;
+            background-color: #ffffff;
             border: 1px solid #e2e8f0;
             padding: 0.85rem 1rem;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
         }
         div[data-testid="stMetric"] label {
             color: #475569 !important;
@@ -63,30 +64,30 @@ st.markdown(
             background-color: #fee2e2;
             color: #991b1b;
             border: 1px solid #fca5a5;
-            padding: 0.32rem 0.75rem;
+            padding: 0.3rem 0.75rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
         }
         .rozet-orta {
             display: inline-block;
             background-color: #fef3c7;
             color: #92400e;
             border: 1px solid #fcd34d;
-            padding: 0.32rem 0.75rem;
+            padding: 0.3rem 0.75rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
         }
         .rozet-dusuk {
             display: inline-block;
             background-color: #dcfce7;
             color: #166534;
             border: 1px solid #86efac;
-            padding: 0.32rem 0.75rem;
+            padding: 0.3rem 0.75rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
         }
         .alt-bilgi {
             margin-top: 1.5rem;
@@ -120,6 +121,7 @@ ETIKETLER = {
     "sayac_tipi": "Sayaç Tipi",
 }
 
+# Ekrandaki metin -> Verideki sayısal kod eşleşmesi (kendi verinize göre düzenleyin)
 ABONE_TIPI_MAP = {
     "Konut": 0,
     "Tarım-Hayvancılık": 1,
@@ -138,6 +140,7 @@ KOD_SOZLUKLERI = {
     "sayac_tipi": SAYAC_TIPI_MAP,
 }
 
+# Görsel kıyas için referans medyan değerler
 REFERANS_TUKETIM = {
     "normal_yaz": 14.8,
     "normal_kis": 11.0,
@@ -182,31 +185,114 @@ def varsayilan_satir_olustur() -> dict:
     return satir
 
 
-def risk_skala_html(olas_val: float, orta_val: float, yuksek_val: float) -> str:
-    pct = min(max(olas_val * 100.0, 0.0), 100.0)
-    orta_pct = min(max(orta_val * 100.0, 1.0), 95.0)
-    yuksek_pct = min(max(yuksek_val * 100.0, orta_pct + 2.0), 99.0)
-    d_w = orta_pct
-    o_w = max(yuksek_pct - orta_pct, 1.0)
-    y_w = max(100.0 - yuksek_pct, 1.0)
+def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> go.Figure:
+    pct = round(min(max(olas_val * 100.0, 0.0), 100.0), 1)
+    orta_pct = round(min(max(orta_val * 100.0, 1.0), 95.0), 1)
+    yuksek_pct = round(min(max(yuksek_val * 100.0, orta_pct + 2.0), 99.0), 1)
 
-    return f"""
-    <div style="margin: 0.4rem 0 0.8rem 0;">
-        <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#64748b; margin-bottom:4px;">
-            <span>Düşük (&lt;%{orta_pct:.0f})</span>
-            <span>Orta (%{orta_pct:.0f}–%{yuksek_pct:.0f})</span>
-            <span>Yüksek (≥%{yuksek_pct:.0f})</span>
-        </div>
-        <div style="position:relative; height:12px; border-radius:999px; overflow:hidden; display:flex; border:1px solid #cbd5e1;">
-            <div style="width:{d_w}%; background:#86efac;"></div>
-            <div style="width:{o_w}%; background:#fde047;"></div>
-            <div style="width:{y_w}%; background:#fca5a5;"></div>
-        </div>
-        <div style="position:relative; height:14px; margin-top:2px;">
-            <div style="position:absolute; left:calc({pct}% - 6px); font-size:0.8rem; color:#0f172a; font-weight:700;">▲ %{pct:.1f}</div>
-        </div>
-    </div>
-    """
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=pct,
+            number={"suffix": "%", "font": {"size": 28, "color": "#0f172a"}},
+            title={"text": "Kaçak Şüphe Skoru", "font": {"size": 14, "color": "#334155"}},
+            gauge={
+                "axis": {"range": [0, 100], "ticksuffix": "%", "tickfont": {"size": 11}},
+                "bar": {"color": "#0f2942", "thickness": 0.28},
+                "bgcolor": "#ffffff",
+                "borderwidth": 1,
+                "bordercolor": "#e2e8f0",
+                "steps": [
+                    {"range": [0, orta_pct], "color": "#dcfce7"},
+                    {"range": [orta_pct, yuksek_pct], "color": "#fef3c7"},
+                    {"range": [yuksek_pct, 100], "color": "#fee2e2"},
+                ],
+                "threshold": {
+                    "line": {"color": "#dc2626", "width": 3},
+                    "thickness": 0.85,
+                    "value": yuksek_pct,
+                },
+            },
+        )
+    )
+    fig.update_layout(
+        height=230,
+        margin=dict(l=20, r=20, t=38, b=10),
+        paper_bgcolor="#ffffff",
+    )
+    return fig
+
+
+def powerbi_tuketim_grafigi(yaz_val: float, kis_val: float) -> go.Figure:
+    donemler = ["Yaz Dönemi", "Kış Dönemi"]
+    girilen = [yaz_val, kis_val]
+    normal = [REFERANS_TUKETIM["normal_yaz"], REFERANS_TUKETIM["normal_kis"]]
+    riskli = [REFERANS_TUKETIM["riskli_yaz"], REFERANS_TUKETIM["riskli_kis"]]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            name="Girilen Abone",
+            x=donemler,
+            y=girilen,
+            text=[f"{v:.1f} m³" for v in girilen],
+            textposition="outside",
+            marker_color="#1d4ed8",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            name="Normal Profil (Medyan)",
+            x=donemler,
+            y=normal,
+            text=[f"{v:.1f} m³" for v in normal],
+            textposition="outside",
+            marker_color="#059669",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            name="Kaçak Şüphe Profili",
+            x=donemler,
+            y=riskli,
+            text=[f"{v:.1f} m³" for v in riskli],
+            textposition="outside",
+            marker_color="#dc2626",
+        )
+    )
+
+    max_y = max(girilen + normal + riskli) * 1.22
+    fig.update_layout(
+        title=dict(
+            text="Dönemsel Tüketim Kıyaslaması (m³)",
+            font=dict(size=15, color="#0f172a"),
+            x=0.0,
+        ),
+        barmode="group",
+        bargap=0.24,
+        bargroupgap=0.08,
+        height=310,
+        margin=dict(l=15, r=15, t=48, b=15),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        yaxis=dict(
+            range=[0, max(max_y, 5.0)],
+            showgrid=True,
+            gridcolor="#e2e8f0",
+            gridwidth=1,
+            title="Tüketim (m³)",
+        ),
+        xaxis=dict(showgrid=False),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            font=dict(size=11),
+        ),
+    )
+    return fig
 
 
 # Üst Kurumsal Banner
@@ -220,7 +306,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-sol_panel, sag_panel = st.columns([1.02, 1.38], gap="large")
+sol_panel, sag_panel = st.columns([1.0, 1.42], gap="large")
 
 girdiler = {}
 secilen_etiketler = {}
@@ -307,7 +393,7 @@ with sol_panel:
     tahmin_basildi = st.button("🚀 Risk Skorunu Hesapla", type="primary", use_container_width=True)
 
 with sag_panel:
-    st.subheader("2. Risk Değerlendirmesi ve Saha Görünümü")
+    st.subheader("2. Power BI Görünümlü Risk ve Tüketim Paneli")
 
     tam_satir = varsayilan_satir_olustur()
     tam_satir.update(girdiler)
@@ -321,7 +407,7 @@ with sag_panel:
         kontrol_maddeleri = [
             "Sayaç önü bağlantı ve by-pass / hat müdahalesi kontrolü",
             "Sayaç camı, mühür ve fiziksel hasar incelemesi",
-            "Son 12 aylık dönemlik tüketim dalgalanmasının sahada doğrulanması",
+            "Son 12 aylık dönemlik tüketim sapmasının sahada doğrulanması",
         ]
     elif olas >= orta_esik:
         risk_etiket = "Orta Risk"
@@ -353,40 +439,26 @@ with sag_panel:
             },
         )
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Kaçak Şüphe Skoru", f"%{olas * 100:.1f}")
-    m2.metric("Yüksek Risk Eşiği", f"%{yuksek_esik * 100:.0f}")
-    m3.metric("Sayaç Yaşı", f"{girdiler.get('sayac_yasi', 0)} yıl")
+    g_sol, g_sag = st.columns([0.9, 1.2], gap="medium")
+    with g_sol:
+        st.plotly_chart(powerbi_risk_kadran(olas, orta_esik, yuksek_esik), use_container_width=True)
+        st.markdown(f"<div style='text-align:center;'>{rozet_html}</div>", unsafe_allow_html=True)
+    with g_sag:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.info(f"**Saha Önerisi:** {aksiyon}")
+        with st.container(border=True):
+            st.markdown("**Saha Kontrol Odakları**")
+            for madde in kontrol_maddeleri:
+                st.markdown(f"- {madde}")
 
-    st.markdown(f"<div style='margin: 0.5rem 0 0.25rem 0;'>{rozet_html}</div>", unsafe_allow_html=True)
-    st.markdown(risk_skala_html(olas, orta_esik, yuksek_esik), unsafe_allow_html=True)
-
-    st.info(f"**Saha Önerisi:** {aksiyon}")
-
-    with st.container(border=True):
-        st.markdown("**Saha Kontrol Odakları**")
-        for madde in kontrol_maddeleri:
-            st.markdown(f"- {madde}")
-
-    st.markdown("**Dönemsel Tüketim Profil Kıyaslaması (m³)**")
-    df_kiyas = pd.DataFrame(
-        {
-            "Girilen Abone": [
-                float(girdiler.get("tuketim_yaz_m3", 0)),
-                float(girdiler.get("tuketim_kis_m3", 0)),
-            ],
-            "Normal Profil": [
-                REFERANS_TUKETIM["normal_yaz"],
-                REFERANS_TUKETIM["normal_kis"],
-            ],
-            "Kaçak Şüphe Profili": [
-                REFERANS_TUKETIM["riskli_yaz"],
-                REFERANS_TUKETIM["riskli_kis"],
-            ],
-        },
-        index=["Yaz Tüketimi (m³)", "Kış Tüketimi (m³)"],
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.plotly_chart(
+        powerbi_tuketim_grafigi(
+            float(girdiler.get("tuketim_yaz_m3", 0)),
+            float(girdiler.get("tuketim_kis_m3", 0)),
+        ),
+        use_container_width=True,
     )
-    st.bar_chart(df_kiyas, use_container_width=True)
 
     with st.expander("Modele gönderilen sayısal kod ve girdi özeti"):
         st.json({ETIKETLER.get(k, k): v for k, v in girdiler.items()})
