@@ -304,10 +304,10 @@ def varsayilan_satir_olustur() -> dict:
 
 
 def senaryo_uygula(kis: float, hane: int, yaz: float, yas: int, abone_adaylari: list[str]):
-    st.session_state["tuketim_kis_m3"] = kis
-    st.session_state["hane_buyuklugu"] = hane
-    st.session_state["tuketim_yaz_m3"] = yaz
-    st.session_state["sayac_yasi"] = yas
+    st.session_state["tuketim_kis_m3"] = float(kis)
+    st.session_state["hane_buyuklugu"] = int(hane)
+    st.session_state["tuketim_yaz_m3"] = float(yaz)
+    st.session_state["sayac_yasi"] = int(yas)
 
     kat_meta = ornek_degerler.get("abone_tipi", {})
     secenekler = [str(x) for x in kat_meta.get("secenekler", [])]
@@ -425,15 +425,12 @@ st.session_state["tuketim_yaz_m3"] = float(st.session_state["tuketim_yaz_m3"])
 st.session_state["hane_buyuklugu"] = int(st.session_state["hane_buyuklugu"])
 st.session_state["sayac_yasi"] = int(st.session_state["sayac_yasi"])
 
-if "son_sonuc" not in st.session_state:
-    st.session_state["son_sonuc"] = None
-
 st.markdown(
     """
     <div class="hero-card">
         <div class="hero-badge">BURDUR • SU ŞEBEKESİ</div>
         <div class="hero-title">Kaçak Su Risk Analiz ve Saha Öncelik Paneli</div>
-        <p class="hero-sub">Abone tüketim davranışından kaçak şüphesi olasılığını hesaplar ve saha ekibi için öncelik önerir.</p>
+        <p class="hero-sub">Girdiler değiştikçe kaçak şüphesi olasılığını anlık hesaplar ve saha ekibi için öncelik önerir.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -462,7 +459,7 @@ sol, sag = st.columns([1, 1.2], gap="large")
 
 with sol:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Abone Bilgileri</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">Abone Bilgileri (Anlık Güncellenir)</div>', unsafe_allow_html=True)
 
         b1, b2 = st.columns(2)
         b1.button(
@@ -489,71 +486,62 @@ with sol:
         c3.number_input(ETIKETLER["hane_buyuklugu"], min_value=1, max_value=30, step=1, key="hane_buyuklugu")
         c4.number_input(ETIKETLER["sayac_yasi"], min_value=0, max_value=60, step=1, key="sayac_yasi")
 
-        hesapla = st.button("Riski Hesapla", type="primary", use_container_width=True)
+        gecmise_ekle = st.button("Mevcut senaryoyu geçmişe kaydet", type="primary", use_container_width=True)
 
-    if hesapla:
-        satir = dict(varsayilan)
-        for col in ONEMLI_SUTUNLAR:
-            satir[col] = st.session_state[col]
-        df = pd.DataFrame([satir])[beklenen_sutunlar]
+# Her rerun'da güncel girdilerle anlık tahmin
+satir = dict(varsayilan)
+for col in ONEMLI_SUTUNLAR:
+    satir[col] = st.session_state[col]
+df_canli = pd.DataFrame([satir])[beklenen_sutunlar]
 
-        try:
-            olasilik = float(pipe.predict_proba(df)[0, 1])
-        except Exception as e:
-            st.error(f"Tahmin sırasında hata oluştu: {e}")
-            st.stop()
+try:
+    olasilik = float(pipe.predict_proba(df_canli)[0, 1])
+except Exception as e:
+    st.error(f"Tahmin sırasında hata oluştu: {e}")
+    st.stop()
 
-        etiket, seviye = risk_kademesi(olasilik)
-        sonuc = {
-            "ilce": st.session_state["ilce"],
-            "olasilik": olasilik,
-            "etiket": etiket,
-            "seviye": seviye,
+etiket, seviye = risk_kademesi(olasilik)
+aktif_ilce = st.session_state["ilce"]
+
+if gecmise_ekle:
+    st.session_state["sorgu_gecmisi"].append(
+        {
+            "İlçe": aktif_ilce,
+            "Abone Tipi": st.session_state["abone_tipi"],
+            "Kış (m³)": st.session_state["tuketim_kis_m3"],
+            "Yaz (m³)": st.session_state["tuketim_yaz_m3"],
+            "Hane": st.session_state["hane_buyuklugu"],
+            "Sayaç Yaşı": st.session_state["sayac_yasi"],
+            "Risk (%)": round(olasilik * 100, 1),
+            "Kademe": etiket,
         }
-        st.session_state["son_sonuc"] = sonuc
-        st.session_state["sorgu_gecmisi"].append(
-            {
-                "İlçe": st.session_state["ilce"],
-                "Abone Tipi": st.session_state["abone_tipi"],
-                "Kış (m³)": st.session_state["tuketim_kis_m3"],
-                "Yaz (m³)": st.session_state["tuketim_yaz_m3"],
-                "Hane": st.session_state["hane_buyuklugu"],
-                "Sayaç Yaşı": st.session_state["sayac_yasi"],
-                "Risk (%)": round(olasilik * 100, 1),
-                "Kademe": etiket,
-            }
-        )
+    )
 
 with sag:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Risk Sonucu</div>', unsafe_allow_html=True)
-        sonuc = st.session_state["son_sonuc"]
-
-        if sonuc is None:
-            st.info("Sol taraftan bilgileri girip 'Riski Hesapla' düğmesine bas.")
-        else:
-            st.plotly_chart(
-                powerbi_risk_kadran(sonuc["olasilik"], orta_esik, yuksek_esik),
-                use_container_width=True,
-            )
-            st.markdown(
-                f'<span class="rozet-{sonuc["seviye"]}">{sonuc["etiket"]}</span>',
-                unsafe_allow_html=True,
-            )
-            st.write("")
-            baslik, metin = KARAR_METINLERI[sonuc["seviye"]]
-            st.markdown(
-                f"""
-                <div class="karar-{sonuc['seviye']}">
-                    <div class="karar-baslik">{baslik}</div>
-                    <div class="karar-metin">{metin}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.write("")
-            harita = folium_ilce_haritasi(sonuc["ilce"], sonuc["olasilik"], sonuc["etiket"])
-            st_folium(harita, height=300, use_container_width=True, returned_objects=[])
+        st.markdown('<div class="panel-title">Canlı Risk Sonucu</div>', unsafe_allow_html=True)
+        st.plotly_chart(
+            powerbi_risk_kadran(olasilik, orta_esik, yuksek_esik),
+            use_container_width=True,
+        )
+        st.markdown(
+            f'<span class="rozet-{seviye}">{etiket}</span>',
+            unsafe_allow_html=True,
+        )
+        st.write("")
+        baslik, metin = KARAR_METINLERI[seviye]
+        st.markdown(
+            f"""
+            <div class="karar-{seviye}">
+                <div class="karar-baslik">{baslik} ({aktif_ilce})</div>
+                <div class="karar-metin">{metin}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.write("")
+        harita = folium_ilce_haritasi(aktif_ilce, olasilik, etiket)
+        st_folium(harita, height=300, use_container_width=True, returned_objects=[])
 
 alt1, alt2 = st.columns([1, 1.2], gap="large")
 
@@ -576,7 +564,7 @@ with alt1:
 
 with alt2:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Sorgu Geçmişi</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">Kaydedilen Sorgu Geçmişi</div>', unsafe_allow_html=True)
         if st.session_state["sorgu_gecmisi"]:
             gecmis_df = pd.DataFrame(st.session_state["sorgu_gecmisi"][::-1])
             st.dataframe(gecmis_df, use_container_width=True, hide_index=True)
@@ -584,7 +572,7 @@ with alt2:
                 st.session_state["sorgu_gecmisi"] = []
                 st.rerun()
         else:
-            st.caption("Henüz sorgu yapılmadı.")
+            st.caption("İstediğiniz an 'Mevcut senaryoyu geçmişe kaydet' ile karşılaştırma satırı ekleyebilirsiniz.")
 
 st.markdown(
     '<div class="footer-bar">Bu panel karar destek amaçlıdır; sentetik veriyle eğitilmiş bir modele dayanır. Saha kararı yetkili personelce verilmelidir.</div>',
