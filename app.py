@@ -126,14 +126,6 @@ st.markdown(
             color: #475569 !important;
             margin-top: 0.25rem;
         }
-        .panel-card {
-            background: #ffffff !important;
-            border: 1px solid #dbe3ee;
-            border-radius: 16px;
-            padding: 1.25rem 1.35rem;
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-            margin-bottom: 1rem;
-        }
         .panel-title {
             font-size: 1.06rem;
             font-weight: 800;
@@ -345,7 +337,9 @@ def folium_ilce_haritasi(ilce_adi: str, olas_val: float, risk_etiket: str) -> fo
             lat, lon = varsayilan_koord
 
     renk = "#dc2626" if olas_val >= yuksek_esik else ("#d97706" if olas_val >= orta_esik else "#16a34a")
-    m = folium.Map(location=[lat, lon], zoom_start=11 if koord_bulundu else 9, tiles="CartoDB positron")
+    m = folium.Map(location=[lat, lon], zoom_start=11 if koord_bulundu else 9, tiles=None)
+    folium.TileLayer("OpenStreetMap", name="OpenStreetMap", attr="OpenStreetMap").add_to(m)
+
     popup_html = f"<b>İlçe:</b> {ilce_adi}<br><b>Risk Skoru:</b> %{olas_val * 100:.1f}<br><b>Kademe:</b> {risk_etiket}"
 
     folium.Circle(location=[lat, lon], radius=3500, color=renk, fill=True, fill_color=renk, fill_opacity=0.22, weight=2).add_to(m)
@@ -412,9 +406,6 @@ KARAR_METINLERI = {
     "dusuk": ("Rutin takip", "Mevcut verilere göre belirgin bir kaçak şüphesi yok. Rutin sayaç okuma yeterli."),
 }
 
-# ------------------------------------------------------------------ #
-# Başlangıç değerleri
-# ------------------------------------------------------------------ #
 varsayilan = varsayilan_satir_olustur()
 
 ilce_secenekleri = [str(x) for x in ornek_degerler.get("ilce", {}).get("secenekler", [])] or list(ILCE_KOORDINATLARI.keys())
@@ -437,9 +428,6 @@ st.session_state["sayac_yasi"] = int(st.session_state["sayac_yasi"])
 if "son_sonuc" not in st.session_state:
     st.session_state["son_sonuc"] = None
 
-# ------------------------------------------------------------------ #
-# Başlık
-# ------------------------------------------------------------------ #
 st.markdown(
     """
     <div class="hero-card">
@@ -472,9 +460,6 @@ st.write("")
 
 sol, sag = st.columns([1, 1.2], gap="large")
 
-# ------------------------------------------------------------------ #
-# Sol: girdi paneli
-# ------------------------------------------------------------------ #
 with sol:
     with st.container(border=True):
         st.markdown('<div class="panel-title">Abone Bilgileri</div>', unsafe_allow_html=True)
@@ -539,9 +524,6 @@ with sol:
             }
         )
 
-# ------------------------------------------------------------------ #
-# Sağ: sonuç paneli
-# ------------------------------------------------------------------ #
 with sag:
     with st.container(border=True):
         st.markdown('<div class="panel-title">Risk Sonucu</div>', unsafe_allow_html=True)
@@ -573,9 +555,6 @@ with sag:
             harita = folium_ilce_haritasi(sonuc["ilce"], sonuc["olasilik"], sonuc["etiket"])
             st_folium(harita, height=300, use_container_width=True, returned_objects=[])
 
-# ------------------------------------------------------------------ #
-# Alt: model etkisi + geçmiş
-# ------------------------------------------------------------------ #
 alt1, alt2 = st.columns([1, 1.2], gap="large")
 
 with alt1:
