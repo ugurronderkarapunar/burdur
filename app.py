@@ -928,8 +928,8 @@ with tab_toplu:
                     haftalik_saha_maliyeti = float(haftalik_gun) * float(gunluk_ekip_maliyeti)
                     aylik_saha_maliyeti = haftalik_saha_maliyeti * 4.0
 
-                    net_temkinli_aylik = temkinli_aylik_geri_kazanim - aylık_saha_maliyeti
-                    net_iyimser_aylik = iyimser_aylik_geri_kazanim - aylık_saha_maliyeti
+                    net_temkinli_aylik = temkinli_aylik_geri_kazanim - aylik_saha_maliyeti
+                    net_iyimser_aylik = iyimser_aylik_geri_kazanim - aylik_saha_maliyeti
 
                     st.divider()
                     st.markdown(
