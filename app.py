@@ -132,6 +132,34 @@ st.markdown(
             color: #0f172a !important;
             margin: 0 0 0.85rem 0;
         }
+        .finans-card {
+            background: #f8fafc !important;
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid #0e7490;
+            border-radius: 12px;
+            padding: 0.9rem 1.05rem;
+            margin-top: 0.6rem;
+        }
+        .finans-baslik {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #0f4c64 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-bottom: 0.25rem;
+        }
+        .finans-tutar {
+            font-size: 1.38rem;
+            font-weight: 800;
+            color: #0f172a !important;
+            line-height: 1.2;
+        }
+        .finans-not {
+            font-size: 0.8rem;
+            color: #475569 !important;
+            margin-top: 0.25rem;
+            line-height: 1.35;
+        }
         .karar-yuksek {
             background: #fff5f5 !important;
             border-left: 5px solid #dc2626;
@@ -320,7 +348,29 @@ def senaryo_uygula(kis: float, hane: int, yaz: float, yas: int, abone_adaylari: 
             st.session_state["abone_tipi"] = secenekler[0]
 
 
-def folium_ilce_haritasi(ilce_adi: str, olas_val: float, risk_etiket: str) -> folium.Map:
+def aylik_parasal_karsilik_hesapla(
+    kis_m3: float,
+    yaz_m3: float,
+    hane_sayisi: int,
+    olasilik: float,
+    birim_tarife_tl: float,
+    ek_kacak_hacim_m3: float,
+) -> tuple[float, float, float]:
+    # Hane büyüklüğüne göre beklenen aylık ortalama tüketim (m3/ay)
+    beklenen_aylik_m3 = max(hane_sayisi, 1) * 4.2
+    mevcut_ortalama_m3 = (float(kis_m3) + float(yaz_m3)) / 2.0
+    tuketim_acigi_m3 = max(0.0, beklenen_aylik_m3 - mevcut_ortalama_m3)
+
+    # Tahmini kaçak hacim: tüketim açığı + varsayılan ek kaçak/bypass hacmi
+    tahmini_kacak_m3 = round(tuketim_acigi_m3 + float(ek_kacak_hacim_m3), 2)
+
+    # Olasılık ağırlıklı beklenen aylık parasal karşılık (TL/ay)
+    aylik_tl = round(tahmini_kacak_m3 * float(birim_tarife_tl) * float(olasilik), 2)
+    yillik_tl = round(aylik_tl * 12.0, 2)
+    return aylik_tl, yillik_tl, tahmini_kacak_m3
+
+
+def folium_ilce_haritasi(ilce_adi: str, olas_val: float, risk_etiket: str, aylik_tl: float) -> folium.Map:
     varsayilan_koord = (37.7203, 30.2908)
     koord_bulundu = False
 
@@ -340,13 +390,18 @@ def folium_ilce_haritasi(ilce_adi: str, olas_val: float, risk_etiket: str) -> fo
     m = folium.Map(location=[lat, lon], zoom_start=11 if koord_bulundu else 9, tiles=None)
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap", attr="OpenStreetMap").add_to(m)
 
-    popup_html = f"<b>İlçe:</b> {ilce_adi}<br><b>Risk Skoru:</b> %{olas_val * 100:.1f}<br><b>Kademe:</b> {risk_etiket}"
+    popup_html = (
+        f"<b>İlçe:</b> {ilce_adi}<br>"
+        f"<b>Risk Skoru:</b> %{olas_val * 100:.1f}<br>"
+        f"<b>Kademe:</b> {risk_etiket}<br>"
+        f"<b>Tahmini Aylık Karşılık:</b> {aylik_tl:,.0f} TL/ay"
+    )
 
     folium.Circle(location=[lat, lon], radius=3500, color=renk, fill=True, fill_color=renk, fill_opacity=0.22, weight=2).add_to(m)
     folium.Marker(
         location=[lat, lon],
-        popup=folium.Popup(popup_html, max_width=240),
-        tooltip=f"{ilce_adi} • %{olas_val * 100:.1f} ({risk_etiket})",
+        popup=folium.Popup(popup_html, max_width=260),
+        tooltip=f"{ilce_adi} • %{olas_val * 100:.1f} • {aylik_tl:,.0f} TL/ay",
         icon=folium.Icon(color="red" if olas_val >= yuksek_esik else ("orange" if olas_val >= orta_esik else "green"), icon="tint", prefix="fa"),
     ).add_to(m)
 
@@ -384,8 +439,8 @@ def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> 
         )
     )
     fig.update_layout(
-        height=260,
-        margin=dict(l=20, r=20, t=50, b=10),
+        height=240,
+        margin=dict(l=20, r=20, t=45, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Plus Jakarta Sans"},
     )
@@ -425,29 +480,59 @@ st.session_state["tuketim_yaz_m3"] = float(st.session_state["tuketim_yaz_m3"])
 st.session_state["hane_buyuklugu"] = int(st.session_state["hane_buyuklugu"])
 st.session_state["sayac_yasi"] = int(st.session_state["sayac_yasi"])
 
+if "birim_tarife_tl" not in st.session_state:
+    st.session_state["birim_tarife_tl"] = 45.0
+if "ek_kacak_hacim_m3" not in st.session_state:
+    st.session_state["ek_kacak_hacim_m3"] = 5.0
+
+# Canlı model tahmini
+satir = dict(varsayilan)
+for col in ONEMLI_SUTUNLAR:
+    satir[col] = st.session_state[col]
+df_canli = pd.DataFrame([satir])[beklenen_sutunlar]
+
+try:
+    olasilik = float(pipe.predict_proba(df_canli)[0, 1])
+except Exception as e:
+    st.error(f"Tahmin sırasında hata oluştu: {e}")
+    st.stop()
+
+etiket, seviye = risk_kademesi(olasilik)
+aktif_ilce = st.session_state["ilce"]
+
+aylik_tl, yillik_tl, tahmini_kacak_m3 = aylik_parasal_karsilik_hesapla(
+    kis_m3=st.session_state["tuketim_kis_m3"],
+    yaz_m3=st.session_state["tuketim_yaz_m3"],
+    hane_sayisi=st.session_state["hane_buyuklugu"],
+    olasilik=olasilik,
+    birim_tarife_tl=st.session_state["birim_tarife_tl"],
+    ek_kacak_hacim_m3=st.session_state["ek_kacak_hacim_m3"],
+)
+
 st.markdown(
     """
     <div class="hero-card">
         <div class="hero-badge">BURDUR • SU ŞEBEKESİ</div>
         <div class="hero-title">Kaçak Su Risk Analiz ve Saha Öncelik Paneli</div>
-        <p class="hero-sub">Girdiler değiştikçe kaçak şüphesi olasılığını anlık hesaplar ve saha ekibi için öncelik önerir.</p>
+        <p class="hero-sub">Girdiler değiştikçe kaçak şüphesi olasılığını ve tahmini aylık parasal karşılığı anlık hesaplar.</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-k1, k2, k3 = st.columns(3)
-for kol, etiket, deger, ipucu in [
+k1, k2, k3, k4 = st.columns(4)
+for kol, etiket_k, deger_k, ipucu_k in [
     (k1, "Model Test F1", f"{test_f1:.3f}", "Test verisi üzerinde"),
     (k2, "Yüksek Risk Eşiği", f"%{yuksek_esik * 100:.0f}", "Bu değer ve üstü: saha kontrolü"),
-    (k3, "Orta Risk Eşiği", f"%{orta_esik * 100:.0f}", "Bu değer ve üstü: izleme"),
+    (k3, "Tahmini Aylık Karşılık", f"{aylik_tl:,.0f} TL/ay", f"~{tahmini_kacak_m3:.1f} m³/ay × {st.session_state['birim_tarife_tl']:.0f} TL × %{olasilik*100:.0f}"),
+    (k4, "Yıllık Projeksiyon", f"{yillik_tl:,.0f} TL/yıl", "12 aylık tahmini karşılık"),
 ]:
     kol.markdown(
         f"""
         <div class="kpi-card">
-            <div class="kpi-label">{etiket}</div>
-            <div class="kpi-value">{deger}</div>
-            <div class="kpi-hint">{ipucu}</div>
+            <div class="kpi-label">{etiket_k}</div>
+            <div class="kpi-value">{deger_k}</div>
+            <div class="kpi-hint">{ipucu_k}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -459,7 +544,7 @@ sol, sag = st.columns([1, 1.2], gap="large")
 
 with sol:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Abone Bilgileri (Anlık Güncellenir)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">Abone ve Tarife Parametreleri (Anlık)</div>', unsafe_allow_html=True)
 
         b1, b2 = st.columns(2)
         b1.button(
@@ -486,22 +571,11 @@ with sol:
         c3.number_input(ETIKETLER["hane_buyuklugu"], min_value=1, max_value=30, step=1, key="hane_buyuklugu")
         c4.number_input(ETIKETLER["sayac_yasi"], min_value=0, max_value=60, step=1, key="sayac_yasi")
 
+        f1, f2 = st.columns(2)
+        f1.number_input("Birim Su Tarifesi (TL/m³)", min_value=1.0, max_value=500.0, step=1.0, key="birim_tarife_tl")
+        f2.number_input("Ek Kaçak Hacim Varsayımı (m³/ay)", min_value=0.0, max_value=200.0, step=1.0, key="ek_kacak_hacim_m3")
+
         gecmise_ekle = st.button("Mevcut senaryoyu geçmişe kaydet", type="primary", use_container_width=True)
-
-# Her rerun'da güncel girdilerle anlık tahmin
-satir = dict(varsayilan)
-for col in ONEMLI_SUTUNLAR:
-    satir[col] = st.session_state[col]
-df_canli = pd.DataFrame([satir])[beklenen_sutunlar]
-
-try:
-    olasilik = float(pipe.predict_proba(df_canli)[0, 1])
-except Exception as e:
-    st.error(f"Tahmin sırasında hata oluştu: {e}")
-    st.stop()
-
-etiket, seviye = risk_kademesi(olasilik)
-aktif_ilce = st.session_state["ilce"]
 
 if gecmise_ekle:
     st.session_state["sorgu_gecmisi"].append(
@@ -513,13 +587,14 @@ if gecmise_ekle:
             "Hane": st.session_state["hane_buyuklugu"],
             "Sayaç Yaşı": st.session_state["sayac_yasi"],
             "Risk (%)": round(olasilik * 100, 1),
+            "Tahmini Aylık (TL)": round(aylik_tl, 0),
             "Kademe": etiket,
         }
     )
 
 with sag:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Canlı Risk Sonucu</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">Canlı Risk ve Parasal Karşılık Sonucu</div>', unsafe_allow_html=True)
         st.plotly_chart(
             powerbi_risk_kadran(olasilik, orta_esik, yuksek_esik),
             use_container_width=True,
@@ -539,9 +614,19 @@ with sag:
             """,
             unsafe_allow_html=True,
         )
+        st.markdown(
+            f"""
+            <div class="finans-card">
+                <div class="finans-baslik">Tahmini Aylık Parasal Karşılık</div>
+                <div class="finans-tutar">{aylik_tl:,.0f} TL / ay <span style="font-size:0.9rem;font-weight:600;color:#475569;">({yillik_tl:,.0f} TL / yıl)</span></div>
+                <div class="finans-not">Hane başına beklenen tüketime göre açığın ve ek kaçak hacmin ({tahmini_kacak_m3:.1f} m³/ay) birim tarife ({st.session_state['birim_tarife_tl']:.0f} TL/m³) ve model olasılığı (%{olasilik*100:.1f}) ile çarpımıdır.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.write("")
-        harita = folium_ilce_haritasi(aktif_ilce, olasilik, etiket)
-        st_folium(harita, height=300, use_container_width=True, returned_objects=[])
+        harita = folium_ilce_haritasi(aktif_ilce, olasilik, etiket, aylik_tl)
+        st_folium(harita, height=290, use_container_width=True, returned_objects=[])
 
 alt1, alt2 = st.columns([1, 1.2], gap="large")
 
@@ -575,6 +660,6 @@ with alt2:
             st.caption("İstediğiniz an 'Mevcut senaryoyu geçmişe kaydet' ile karşılaştırma satırı ekleyebilirsiniz.")
 
 st.markdown(
-    '<div class="footer-bar">Bu panel karar destek amaçlıdır; sentetik veriyle eğitilmiş bir modele dayanır. Saha kararı yetkili personelce verilmelidir.</div>',
+    '<div class="footer-bar">Bu panel karar destek amaçlıdır; parasal tutarlar tarife ve hacim varsayımlarına dayalı tahmini karşılıktır. Saha kararı yetkili personelce verilmelidir.</div>',
     unsafe_allow_html=True,
 )
