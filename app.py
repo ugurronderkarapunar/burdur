@@ -1,3 +1,4 @@
+import io
 import folium
 import joblib
 import numpy as np
@@ -509,6 +510,38 @@ def risk_kademesi(p: float):
     return "Düşük Risk", "dusuk"
 
 
+def df_to_excel_bytes(df: pd.DataFrame, sheet_name: str = "Saha_Listesi") -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name[:31])
+    return buf.getvalue()
+
+
+def ornek_abone_dosyasi_olustur(ilce_liste: list[str], abone_liste: list[str]) -> pd.DataFrame:
+    rng = np.random.default_rng(42)
+    n = 120
+    ilceler = rng.choice(ilce_liste, size=n)
+    tipler = rng.choice(abone_liste, size=n)
+    haneler = rng.integers(1, 7, size=n)
+    yaslar = rng.integers(1, 22, size=n)
+    kis_tuk = np.round(rng.uniform(1.5, 18.0, size=n), 1)
+    yaz_tuk = np.round(kis_tuk + rng.uniform(-1.0, 9.5, size=n), 1)
+    yaz_tuk = np.maximum(yaz_tuk, 1.0)
+
+    return pd.DataFrame(
+        {
+            "abone_no": [f"ABN-{10000 + i}" for i in range(n)],
+            "mahalle": [f"{ilc} Mah. {(i % 8) + 1}" for i, ilc in enumerate(ilceler)],
+            "ilce": ilceler,
+            "abone_tipi": tipler,
+            "hane_buyuklugu": haneler,
+            "sayac_yasi": yaslar,
+            "tuketim_kis_m3": kis_tuk,
+            "tuketim_yaz_m3": yaz_tuk,
+        }
+    )
+
+
 KARAR_METINLERI = {
     "yuksek": ("Öncelikli saha kontrolü", "Abone için sayaç ve tesisat kontrolü öncelikli planlanmalı. Kaçak kullanım şüphesi yüksek."),
     "orta": ("İzleme listesine al", "Tüketim davranışı izlenmeli. Sonraki okuma döneminde sapma sürerse saha kontrolüne alınabilir."),
@@ -539,200 +572,452 @@ if "birim_tarife_tl" not in st.session_state:
 if "ek_kacak_hacim_m3" not in st.session_state:
     st.session_state["ek_kacak_hacim_m3"] = 5.0
 
-satir = dict(varsayilan)
-for col in ONEMLI_SUTUNLAR:
-    satir[col] = st.session_state[col]
-df_canli = pd.DataFrame([satir])[beklenen_sutunlar]
-
-try:
-    olasilik = float(pipe.predict_proba(df_canli)[0, 1])
-except Exception as e:
-    st.error(f"Tahmin sırasında hata oluştu: {e}")
-    st.stop()
-
-etiket, seviye = risk_kademesi(olasilik)
-aktif_ilce = st.session_state["ilce"]
-aktif_abone = st.session_state["abone_tipi"]
-aktif_kis = st.session_state["tuketim_kis_m3"]
-aktif_yaz = st.session_state["tuketim_yaz_m3"]
-aktif_hane = st.session_state["hane_buyuklugu"]
-aktif_yas = st.session_state["sayac_yasi"]
-
-aylik_tl, yillik_tl, tahmini_kacak_m3 = aylik_parasal_karsilik_hesapla(
-    kis_m3=aktif_kis,
-    yaz_m3=aktif_yaz,
-    hane_sayisi=aktif_hane,
-    olasilik=olasilik,
-    birim_tarife_tl=st.session_state["birim_tarife_tl"],
-    ek_kacak_hacim_m3=st.session_state["ek_kacak_hacim_m3"],
-)
-
-kontrol_maddeleri = dinamik_saha_kontrol_listesi(
-    seviye=seviye,
-    ilce=aktif_ilce,
-    abone_tipi=aktif_abone,
-    kis_m3=aktif_kis,
-    yaz_m3=aktif_yaz,
-    hane_sayisi=aktif_hane,
-    sayac_yasi=aktif_yas,
-)
-
 st.markdown(
     """
     <div class="hero-card">
         <div class="hero-badge">BURDUR • SU ŞEBEKESİ</div>
         <div class="hero-title">Kaçak Su Risk Analiz ve Saha Öncelik Paneli</div>
-        <p class="hero-sub">Girdiler değiştikçe kaçak şüphesi olasılığını, tahmini aylık parasal karşılığı ve saha kontrol maddelerini anlık günceller.</p>
+        <p class="hero-sub">Sentetik veriyle hazırlandı, pilotla doğrulanacak — tekil abone risk analizi ve haftalık saha kontrol planlaması.</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-k1, k2, k3, k4 = st.columns(4)
-for kol, etiket_k, deger_k, ipucu_k in [
-    (k1, "Model Test F1", f"{test_f1:.3f}", "Test verisi üzerinde"),
-    (k2, "Yüksek Risk Eşiği", f"%{yuksek_esik * 100:.0f}", "Bu değer ve üstü: saha kontrolü"),
-    (k3, "Tahmini Aylık Karşılık", f"{aylik_tl:,.0f} TL/ay", f"~{tahmini_kacak_m3:.1f} m³/ay × {st.session_state['birim_tarife_tl']:.0f} TL × %{olasilik*100:.0f}"),
-    (k4, "Yıllık Projeksiyon", f"{yillik_tl:,.0f} TL/yıl", "12 aylık tahmini karşılık"),
-]:
-    kol.markdown(
-        f"""
-        <div class="kpi-card">
-            <div class="kpi-label">{etiket_k}</div>
-            <div class="kpi-value">{deger_k}</div>
-            <div class="kpi-hint">{ipucu_k}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+st.info(
+    "**Pilot ve Veri Notu:** Bu model ve panel **sentetik veriyle hazırlandı, pilotla doğrulanacak**tır. "
+    "Parasal geri kazanım ve saha kapasitesi hesapları karar destek amaçlı varsayımlara dayanır; ilk saha pilotu bulgularıyla kalibre edilecektir."
+)
+
+tab_tekil, tab_toplu = st.tabs([
+    "🔍 Tekil Abone Sorgulama",
+    "📋 Toplu Yükleme & Haftalık Saha Planı",
+])
+
+# ==============================================================================
+# SEKME 1: MEVCUT TEKİL ABONE ANALİZİ
+# ==============================================================================
+with tab_tekil:
+    satir = dict(varsayilan)
+    for col in ONEMLI_SUTUNLAR:
+        satir[col] = st.session_state[col]
+    df_canli = pd.DataFrame([satir])[beklenen_sutunlar]
+
+    try:
+        olasilik = float(pipe.predict_proba(df_canli)[0, 1])
+    except Exception as e:
+        st.error(f"Tahmin sırasında hata oluştu: {e}")
+        st.stop()
+
+    etiket, seviye = risk_kademesi(olasilik)
+    aktif_ilce = st.session_state["ilce"]
+    aktif_abone = st.session_state["abone_tipi"]
+    aktif_kis = st.session_state["tuketim_kis_m3"]
+    aktif_yaz = st.session_state["tuketim_yaz_m3"]
+    aktif_hane = st.session_state["hane_buyuklugu"]
+    aktif_yas = st.session_state["sayac_yasi"]
+
+    aylik_tl, yillik_tl, tahmini_kacak_m3 = aylik_parasal_karsilik_hesapla(
+        kis_m3=aktif_kis,
+        yaz_m3=aktif_yaz,
+        hane_sayisi=aktif_hane,
+        olasilik=olasilik,
+        birim_tarife_tl=st.session_state["birim_tarife_tl"],
+        ek_kacak_hacim_m3=st.session_state["ek_kacak_hacim_m3"],
     )
 
-st.write("")
-
-sol, sag = st.columns([1, 1.2], gap="large")
-
-with sol:
-    with st.container(border=True):
-        st.markdown('<div class="panel-title">Abone ve Tarife Parametreleri (Anlık)</div>', unsafe_allow_html=True)
-
-        b1, b2 = st.columns(2)
-        b1.button(
-            "Normal abone örneği",
-            use_container_width=True,
-            on_click=senaryo_uygula,
-            args=(REFERANS_TUKETIM["normal_kis"], 4, REFERANS_TUKETIM["normal_yaz"], 5, ["Konut", "Mesken"]),
-        )
-        b2.button(
-            "Riskli abone örneği",
-            use_container_width=True,
-            on_click=senaryo_uygula,
-            args=(REFERANS_TUKETIM["riskli_kis"], 1, REFERANS_TUKETIM["riskli_yaz"], 15, ["Tarım-Hayvancılık", "Tarım", "Hayvancılık"]),
-        )
-
-        st.selectbox(ETIKETLER["ilce"], ilce_secenekleri, key="ilce")
-        st.selectbox(ETIKETLER["abone_tipi"], abone_secenekleri, key="abone_tipi")
-
-        c1, c2 = st.columns(2)
-        c1.number_input(ETIKETLER["tuketim_kis_m3"], min_value=0.0, max_value=500.0, step=0.5, key="tuketim_kis_m3")
-        c2.number_input(ETIKETLER["tuketim_yaz_m3"], min_value=0.0, max_value=500.0, step=0.5, key="tuketim_yaz_m3")
-
-        c3, c4 = st.columns(2)
-        c3.number_input(ETIKETLER["hane_buyuklugu"], min_value=1, max_value=30, step=1, key="hane_buyuklugu")
-        c4.number_input(ETIKETLER["sayac_yasi"], min_value=0, max_value=60, step=1, key="sayac_yasi")
-
-        f1, f2 = st.columns(2)
-        f1.number_input("Birim Su Tarifesi (TL/m³)", min_value=1.0, max_value=500.0, step=1.0, key="birim_tarife_tl")
-        f2.number_input("Ek Kaçak Hacim Varsayımı (m³/ay)", min_value=0.0, max_value=200.0, step=1.0, key="ek_kacak_hacim_m3")
-
-        gecmise_ekle = st.button("Mevcut senaryoyu geçmişe kaydet", type="primary", use_container_width=True)
-
-if gecmise_ekle:
-    st.session_state["sorgu_gecmisi"].append(
-        {
-            "İlçe": aktif_ilce,
-            "Abone Tipi": aktif_abone,
-            "Kış (m³)": aktif_kis,
-            "Yaz (m³)": aktif_yaz,
-            "Hane": aktif_hane,
-            "Sayaç Yaşı": aktif_yas,
-            "Risk (%)": round(olasilik * 100, 1),
-            "Tahmini Aylık (TL)": round(aylik_tl, 0),
-            "Kademe": etiket,
-        }
+    kontrol_maddeleri = dinamik_saha_kontrol_listesi(
+        seviye=seviye,
+        ilce=aktif_ilce,
+        abone_tipi=aktif_abone,
+        kis_m3=aktif_kis,
+        yaz_m3=aktif_yaz,
+        hane_sayisi=aktif_hane,
+        sayac_yasi=aktif_yas,
     )
 
-with sag:
-    with st.container(border=True):
-        st.markdown('<div class="panel-title">Canlı Risk, Saha Kontrol Listesi ve Parasal Karşılık</div>', unsafe_allow_html=True)
-        st.plotly_chart(
-            powerbi_risk_kadran(olasilik, orta_esik, yuksek_esik),
-            use_container_width=True,
-        )
-        st.markdown(
-            f'<span class="rozet-{seviye}">{etiket}</span>',
-            unsafe_allow_html=True,
-        )
-        st.write("")
-        baslik, metin = KARAR_METINLERI[seviye]
-        st.markdown(
+    k1, k2, k3, k4 = st.columns(4)
+    for kol, etiket_k, deger_k, ipucu_k in [
+        (k1, "Model Test F1", f"{test_f1:.3f}", "Test verisi üzerinde"),
+        (k2, "Yüksek Risk Eşiği", f"%{yuksek_esik * 100:.0f}", "Bu değer ve üstü: saha kontrolü"),
+        (k3, "Tahmini Aylık Karşılık", f"{aylik_tl:,.0f} TL/ay", f"~{tahmini_kacak_m3:.1f} m³/ay × {st.session_state['birim_tarife_tl']:.0f} TL × %{olasilik*100:.0f}"),
+        (k4, "Yıllık Projeksiyon", f"{yillik_tl:,.0f} TL/yıl", "12 aylık tahmini karşılık"),
+    ]:
+        kol.markdown(
             f"""
-            <div class="karar-{seviye}">
-                <div class="karar-baslik">{baslik} ({aktif_ilce})</div>
-                <div class="karar-metin">{metin}</div>
+            <div class="kpi-card">
+                <div class="kpi-label">{etiket_k}</div>
+                <div class="kpi-value">{deger_k}</div>
+                <div class="kpi-hint">{ipucu_k}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.write("")
-        st.markdown(f"**Saha Kontrol Kontrol Listesi ({etiket})**")
-        liste_html = "<ul class='kontrol-liste'>" + "".join(f"<li>✓ {m}</li>" for m in kontrol_maddeleri) + "</ul>"
-        st.markdown(liste_html, unsafe_allow_html=True)
 
-        st.markdown(
-            f"""
-            <div class="finans-card">
-                <div class="finans-baslik">Tahmini Aylık Parasal Karşılık</div>
-                <div class="finans-tutar">{aylik_tl:,.0f} TL / ay <span style="font-size:0.9rem;font-weight:600;color:#475569;">({yillik_tl:,.0f} TL / yıl)</span></div>
-                <div class="finans-not">Hane başına beklenen tüketime göre açığın ve ek kaçak hacmin ({tahmini_kacak_m3:.1f} m³/ay) birim tarife ({st.session_state['birim_tarife_tl']:.0f} TL/m³) ve model olasılığı (%{olasilik*100:.1f}) ile çarpımıdır.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    st.write("")
+
+    sol, sag = st.columns([1, 1.2], gap="large")
+
+    with sol:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Abone ve Tarife Parametreleri (Anlık)</div>', unsafe_allow_html=True)
+
+            b1, b2 = st.columns(2)
+            b1.button(
+                "Normal abone örneği",
+                use_container_width=True,
+                on_click=senaryo_uygula,
+                args=(REFERANS_TUKETIM["normal_kis"], 4, REFERANS_TUKETIM["normal_yaz"], 5, ["Konut", "Mesken"]),
+            )
+            b2.button(
+                "Riskli abone örneği",
+                use_container_width=True,
+                on_click=senaryo_uygula,
+                args=(REFERANS_TUKETIM["riskli_kis"], 1, REFERANS_TUKETIM["riskli_yaz"], 15, ["Tarım-Hayvancılık", "Tarım", "Hayvancılık"]),
+            )
+
+            st.selectbox(ETIKETLER["ilce"], ilce_secenekleri, key="ilce")
+            st.selectbox(ETIKETLER["abone_tipi"], abone_secenekleri, key="abone_tipi")
+
+            c1, c2 = st.columns(2)
+            c1.number_input(ETIKETLER["tuketim_kis_m3"], min_value=0.0, max_value=500.0, step=0.5, key="tuketim_kis_m3")
+            c2.number_input(ETIKETLER["tuketim_yaz_m3"], min_value=0.0, max_value=500.0, step=0.5, key="tuketim_yaz_m3")
+
+            c3, c4 = st.columns(2)
+            c3.number_input(ETIKETLER["hane_buyuklugu"], min_value=1, max_value=30, step=1, key="hane_buyuklugu")
+            c4.number_input(ETIKETLER["sayac_yasi"], min_value=0, max_value=60, step=1, key="sayac_yasi")
+
+            f1, f2 = st.columns(2)
+            f1.number_input("Birim Su Tarifesi (TL/m³)", min_value=1.0, max_value=500.0, step=1.0, key="birim_tarife_tl")
+            f2.number_input("Ek Kaçak Hacim Varsayımı (m³/ay)", min_value=0.0, max_value=200.0, step=1.0, key="ek_kacak_hacim_m3")
+
+            gecmise_ekle = st.button("Mevcut senaryoyu geçmişe kaydet", type="primary", use_container_width=True)
+
+    if gecmise_ekle:
+        st.session_state["sorgu_gecmisi"].append(
+            {
+                "İlçe": aktif_ilce,
+                "Abone Tipi": aktif_abone,
+                "Kış (m³)": aktif_kis,
+                "Yaz (m³)": aktif_yaz,
+                "Hane": aktif_hane,
+                "Sayaç Yaşı": aktif_yas,
+                "Risk (%)": round(olasilik * 100, 1),
+                "Tahmini Aylık (TL)": round(aylik_tl, 0),
+                "Kademe": etiket,
+            }
         )
-        st.write("")
-        harita = folium_ilce_haritasi(aktif_ilce, olasilik, etiket, aylik_tl)
-        st_folium(harita, height=290, use_container_width=True, returned_objects=[])
 
-alt1, alt2 = st.columns([1, 1.2], gap="large")
+    with sag:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Canlı Risk, Saha Kontrol Listesi ve Parasal Karşılık</div>', unsafe_allow_html=True)
+            st.plotly_chart(
+                powerbi_risk_kadran(olasilik, orta_esik, yuksek_esik),
+                use_container_width=True,
+            )
+            st.markdown(
+                f'<span class="rozet-{seviye}">{etiket}</span>',
+                unsafe_allow_html=True,
+            )
+            st.write("")
+            baslik, metin = KARAR_METINLERI[seviye]
+            st.markdown(
+                f"""
+                <div class="karar-{seviye}">
+                    <div class="karar-baslik">{baslik} ({aktif_ilce})</div>
+                    <div class="karar-metin">{metin}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.write("")
+            st.markdown(f"**Saha Kontrol Kontrol Listesi ({etiket})**")
+            liste_html = "<ul class='kontrol-liste'>" + "".join(f"<li>✓ {m}</li>" for m in kontrol_maddeleri) + "</ul>"
+            st.markdown(liste_html, unsafe_allow_html=True)
 
-with alt1:
+            st.markdown(
+                f"""
+                <div class="finans-card">
+                    <div class="finans-baslik">Tahmini Aylık Parasal Karşılık</div>
+                    <div class="finans-tutar">{aylik_tl:,.0f} TL / ay <span style="font-size:0.9rem;font-weight:600;color:#475569;">({yillik_tl:,.0f} TL / yıl)</span></div>
+                    <div class="finans-not">Hane başına beklenen tüketime göre açığın ve ek kaçak hacmin ({tahmini_kacak_m3:.1f} m³/ay) birim tarife ({st.session_state['birim_tarife_tl']:.0f} TL/m³) ve model olasılığı (%{olasilik*100:.1f}) ile çarpımıdır.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.write("")
+            harita = folium_ilce_haritasi(aktif_ilce, olasilik, etiket, aylik_tl)
+            st_folium(harita, height=290, use_container_width=True, returned_objects=[])
+
+    alt1, alt2 = st.columns([1, 1.2], gap="large")
+
+    with alt1:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Modelde En Etkili Özellikler</div>', unsafe_allow_html=True)
+            etiketler_ozet = [x[0] for x in OZELLIK_ETKI_OZETI][::-1]
+            degerler_ozet = [x[1] for x in OZELLIK_ETKI_OZETI][::-1]
+            fig_bar = go.Figure(
+                go.Bar(x=degerler_ozet, y=etiketler_ozet, orientation="h", marker_color="#0e7490")
+            )
+            fig_bar.update_layout(
+                height=260,
+                margin=dict(l=10, r=10, t=10, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font={"family": "Plus Jakarta Sans", "color": "#0f172a"},
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    with alt2:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Kaydedilen Sorgu Geçmişi</div>', unsafe_allow_html=True)
+            if st.session_state["sorgu_gecmisi"]:
+                gecmis_df = pd.DataFrame(st.session_state["sorgu_gecmisi"][::-1])
+                st.dataframe(gecmis_df, use_container_width=True, hide_index=True)
+                if st.button("Geçmişi temizle"):
+                    st.session_state["sorgu_gecmisi"] = []
+                    st.rerun()
+            else:
+                st.caption("İstediğiniz an 'Mevcut senaryoyu geçmişe kaydet' ile karşılaştırma satırı ekleyebilirsiniz.")
+
+
+# ==============================================================================
+# SEKME 2: TOPLU YÜKLEME, HAFTALIK SAHA LİSTESİ & NET KAZANÇ ÖZETİ (1 & 2)
+# ==============================================================================
+with tab_toplu:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Modelde En Etkili Özellikler</div>', unsafe_allow_html=True)
-        etiketler_ozet = [x[0] for x in OZELLIK_ETKI_OZETI][::-1]
-        degerler_ozet = [x[1] for x in OZELLIK_ETKI_OZETI][::-1]
-        fig_bar = go.Figure(
-            go.Bar(x=degerler_ozet, y=etiketler_ozet, orientation="h", marker_color="#0e7490")
+        st.markdown('<div class="panel-title">1. Tüm Abone Dosyasını Yükle ve Haftalık Saha Listesi Oluştur</div>', unsafe_allow_html=True)
+        st.caption(
+            "Beklenen sütunlar: `ilce`, `tuketim_kis_m3`, `hane_buyuklugu`, `tuketim_yaz_m3`, `sayac_yasi`, `abone_tipi` "
+            "(isteğe bağlı `abone_no`, `mahalle`). Eksik sütunlar modelin varsayılan/medyan değerleriyle doldurulur."
         )
-        fig_bar.update_layout(
-            height=260,
-            margin=dict(l=10, r=10, t=10, b=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font={"family": "Plus Jakarta Sans", "color": "#0f172a"},
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
 
-with alt2:
-    with st.container(border=True):
-        st.markdown('<div class="panel-title">Kaydedilen Sorgu Geçmişi</div>', unsafe_allow_html=True)
-        if st.session_state["sorgu_gecmisi"]:
-            gecmis_df = pd.DataFrame(st.session_state["sorgu_gecmisi"][::-1])
-            st.dataframe(gecmis_df, use_container_width=True, hide_index=True)
-            if st.button("Geçmişi temizle"):
-                st.session_state["sorgu_gecmisi"] = []
-                st.rerun()
+        ornek_df = ornek_abone_dosyasi_olustur(ilce_secenekleri, abone_secenekleri)
+        st.download_button(
+            label="📥 Örnek Abone Listesi Şablonunu İndir (.xlsx)",
+            data=df_to_excel_bytes(ornek_df, sheet_name="Abone_Verisi"),
+            file_name="ornek_abone_listesi.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        yuklenen_dosya = st.file_uploader(
+            "Abone dosyasını yükleyin (Excel .xlsx veya .csv)",
+            type=["xlsx", "csv"],
+            key="toplu_abone_dosyasi",
+        )
+
+        if yuklenen_dosya is None:
+            st.info(
+                "Haftalık saha listesini ve net kazanç aralığını görmek için yukarıdan bir Excel/CSV dosyası yükleyin "
+                "veya **Örnek Abone Listesi Şablonunu İndir** ile 120 aboneli test dosyasını deneyin."
+            )
         else:
-            st.caption("İstediğiniz an 'Mevcut senaryoyu geçmişe kaydet' ile karşılaştırma satırı ekleyebilirsiniz.")
+            try:
+                if yuklenen_dosya.name.lower().endswith(".csv"):
+                    df_ham = pd.read_csv(yuklenen_dosya)
+                else:
+                    df_ham = pd.read_excel(yuklenen_dosya)
+            except Exception as e:
+                st.error(f"Dosya okunurken hata oluştu: {e}")
+                df_ham = None
+
+            if df_ham is not None and not df_ham.empty:
+                df_calisma = df_ham.copy()
+
+                # Sayısal ve kategorik sütunları güvenli hazırla
+                if "ilce" not in df_calisma.columns:
+                    df_calisma["ilce"] = ilce_secenekleri[0]
+                else:
+                    df_calisma["ilce"] = df_calisma["ilce"].fillna(ilce_secenekleri[0]).astype(str)
+
+                if "abone_tipi" not in df_calisma.columns:
+                    df_calisma["abone_tipi"] = abone_secenekleri[0]
+                else:
+                    df_calisma["abone_tipi"] = df_calisma["abone_tipi"].fillna(abone_secenekleri[0]).astype(str)
+
+                for num_col, varsay_val in [
+                    ("tuketim_kis_m3", float(varsayilan.get("tuketim_kis_m3", 10.0))),
+                    ("tuketim_yaz_m3", float(varsayilan.get("tuketim_yaz_m3", 14.0))),
+                    ("hane_buyuklugu", int(varsayilan.get("hane_buyuklugu", 3))),
+                    ("sayac_yasi", int(varsayilan.get("sayac_yasi", 6))),
+                ]:
+                    if num_col not in df_calisma.columns:
+                        df_calisma[num_col] = varsay_val
+                    else:
+                        df_calisma[num_col] = pd.to_numeric(df_calisma[num_col], errors="coerce").fillna(varsay_val)
+
+                df_model_girdi = pd.DataFrame(index=df_calisma.index)
+                for col in beklenen_sutunlar:
+                    if col in df_calisma.columns:
+                        df_model_girdi[col] = df_calisma[col]
+                    else:
+                        df_model_girdi[col] = varsayilan.get(col, 0)
+
+                try:
+                    olas_dizi = pipe.predict_proba(df_model_girdi)[:, 1].astype(float)
+                except Exception as e:
+                    st.error(f"Toplu tahmin sırasında hata oluştu: {e}")
+                    olas_dizi = None
+
+                if olas_dizi is not None:
+                    df_sonuc = df_calisma.copy()
+                    df_sonuc["risk_olasiligi"] = olas_dizi
+                    df_sonuc["risk_skoru_%"] = np.round(olas_dizi * 100.0, 1)
+
+                    kademe_etiketleri = []
+                    for p_val in olas_dizi:
+                        k_et, _ = risk_kademesi(float(p_val))
+                        kademe_etiketleri.append(k_et)
+                    df_sonuc["risk_kademesi"] = kademe_etiketleri
+
+                    # Risk sırasına göre sırala
+                    df_sirali = df_sonuc.sort_values(by="risk_olasiligi", ascending=False).reset_index(drop=True)
+                    df_sirali.insert(0, "saha_sirasi", np.arange(1, len(df_sirali) + 1))
+
+                    st.divider()
+                    st.markdown('<div class="panel-title">Saha Kapasitesi ve Maliyet Parametreleri</div>', unsafe_allow_html=True)
+
+                    p1, p2, p3, p4 = st.columns(4)
+                    with p1:
+                        gunluk_kapasite = st.slider(
+                            "Günlük Kontrol Kapasitesi (Abone/Gün)",
+                            min_value=1,
+                            max_value=50,
+                            value=10,
+                            step=1,
+                            key="saha_gunluk_kapasite",
+                        )
+                    with p2:
+                        haftalik_gun = st.number_input(
+                            "Haftalık Çalışma Günü",
+                            min_value=1,
+                            max_value=7,
+                            value=5,
+                            step=1,
+                            key="saha_haftalik_gun",
+                        )
+                    with p3:
+                        gunluk_ekip_maliyeti = st.number_input(
+                            "Günlük Ekip Maliyeti (TL/Gün)",
+                            min_value=500.0,
+                            max_value=100000.0,
+                            value=4500.0,
+                            step=250.0,
+                            key="saha_gunluk_maliyet",
+                        )
+                    with p4:
+                        temkinli_oran_pct = st.slider(
+                            "Temkinli Tahsilat / Gerçekleşme (%)",
+                            min_value=10,
+                            max_value=100,
+                            value=50,
+                            step=5,
+                            key="saha_temkinli_oran",
+                        )
+
+                    haftalik_hedef = min(int(gunluk_kapasite) * int(haftalik_gun), len(df_sirali))
+                    haftalik_liste = df_sirali.head(haftalik_hedef).copy()
+
+                    # Her abone için aylık/yıllık tahmini geri kazanım hesabı
+                    aylik_kazanim_list = []
+                    yillik_kazanim_list = []
+                    for _, row in haftalik_liste.iterrows():
+                        a_tl, y_tl, _ = aylik_parasal_karsilik_hesapla(
+                            kis_m3=float(row["tuketim_kis_m3"]),
+                            yaz_m3=float(row["tuketim_yaz_m3"]),
+                            hane_sayisi=int(row["hane_buyuklugu"]),
+                            olasilik=float(row["risk_olasiligi"]),
+                            birim_tarife_tl=float(st.session_state["birim_tarife_tl"]),
+                            ek_kacak_hacim_m3=float(st.session_state["ek_kacak_hacim_m3"]),
+                        )
+                        aylik_kazanim_list.append(a_tl)
+                        yillik_kazanim_list.append(y_tl)
+
+                    haftalik_liste["tahmini_aylik_kazanim_tl"] = aylik_kazanim_list
+                    haftalik_liste["tahmini_yillik_kazanim_tl"] = yillik_kazanim_list
+
+                    # 2. NET KAZANÇ VE GERİ DÖNÜŞ ÖZETİ (İYİMSER & TEMKİNLİ)
+                    # Haftalık kontrol edilen listenin ilk 1 aylık karşılığı üzerinden haftalık/aylık kıyas
+                    iyimser_aylik_geri_kazanim = float(haftalik_liste["tahmini_aylik_kazanim_tl"].sum())
+                    temkinli_aylik_geri_kazanim = iyimser_aylik_geri_kazanim * (float(temkinli_oran_pct) / 100.0)
+
+                    haftalik_saha_maliyeti = float(haftalik_gun) * float(gunluk_ekip_maliyeti)
+                    # Aylık (4 haftalık) saha maliyeti karşılığı ile aylık geri kazanım neti:
+                    aylik_saha_maliyeti = haftalik_saha_maliyeti * 4.0
+
+                    net_temkinli_aylik = temkinli_aylik_geri_kazanim - aylık_saha_maliyeti
+                    net_iyimser_aylik = iyimser_aylik_geri_kazanim - aylık_saha_maliyeti
+
+                    st.divider()
+                    st.markdown(
+                        f'<div class="panel-title">2. Net Kazanç ve Geri Dönüş Özeti (İlk {haftalik_hedef} Abone)</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    n1, n2, n3, n4 = st.columns(4)
+                    for kol, etiket_n, deger_n, ipucu_n in [
+                        (
+                            n1,
+                            "Haftalık / 4-Hafta Saha Maliyeti",
+                            f"{haftalik_saha_maliyeti:,.0f} TL / hf",
+                            f"4 haftada ~{aylik_saha_maliyeti:,.0f} TL ({haftalik_gun} gün × {gunluk_ekip_maliyeti:,.0f} TL)",
+                        ),
+                        (
+                            n2,
+                            "Beklenen Aylık Geri Kazanım Aralığı",
+                            f"{temkinli_aylik_geri_kazanim:,.0f} – {iyimser_aylik_geri_kazanim:,.0f} TL/ay",
+                            f"Temkinli (%{temkinli_oran_pct}) – İyimser (%100)",
+                        ),
+                        (
+                            n3,
+                            f"Net Kazanç (Temkinli %{temkinli_oran_pct})",
+                            f"{net_temkinli_aylik:,.0f} TL/ay",
+                            "Aylık temkinli geri kazanım − 4 haftalık maliyet",
+                        ),
+                        (
+                            n4,
+                            "Net Kazanç (İyimser %100)",
+                            f"{net_iyimser_aylik:,.0f} TL/ay",
+                            "Aylık iyimser geri kazanım − 4 haftalık maliyet",
+                        ),
+                    ]:
+                        kol.markdown(
+                            f"""
+                            <div class="kpi-card">
+                                <div class="kpi-label">{etiket_n}</div>
+                                <div class="kpi-value">{deger_n}</div>
+                                <div class="kpi-hint">{ipucu_n}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                    st.caption(
+                        f"Varsayım notu: İlk {haftalik_hedef} abone kontrolü günde {gunluk_kapasite} abone × {haftalik_gun} gün kapasiteyle planlanır. "
+                        f"Sentetik veriyle hazırlandı, pilotla doğrulanacak; geri kazanım aralığı {st.session_state['birim_tarife_tl']:.0f} TL/m³ tarife ve "
+                        f"%{temkinli_oran_pct} temkinli / %100 iyimser gerçekleşme senaryolarına dayanır."
+                    )
+
+                    st.divider()
+                    st.markdown(
+                        f'<div class="panel-title">Bu Hafta Kontrol Edilecek İlk {haftalik_hedef} Abone (Toplam {len(df_sirali)} Abone İçinden)</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    excel_liste = haftalik_liste.copy()
+                    excel_liste["saha_sonucu"] = ""
+                    excel_liste["not"] = ""
+
+                    st.download_button(
+                        label=f"⬇️ Haftalık Saha Listesini Excel İndir (İlk {haftalik_hedef} Abone)",
+                        data=df_to_excel_bytes(excel_liste, sheet_name="Haftalik_Saha_Listesi"),
+                        file_name=f"haftalik_saha_listesi_{haftalik_hedef}_abone.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                    )
+
+                    st.dataframe(haftalik_liste, use_container_width=True, hide_index=True, height=380)
 
 st.markdown(
-    '<div class="footer-bar">Bu panel karar destek amaçlıdır; parasal tutarlar tarife ve hacim varsayımlarına dayalı tahmini karşılıktır. Saha kararı yetkili personelce verilmelidir.</div>',
+    '<div class="footer-bar">Sentetik veriyle hazırlandı, pilotla doğrulanacak. Bu panel karar destek amaçlıdır; parasal tutarlar tarife ve hacim varsayımlarına dayalı tahmini karşılıktır. Saha kararı yetkili personelce verilmelidir.</div>',
     unsafe_allow_html=True,
 )
