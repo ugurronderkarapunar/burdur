@@ -46,48 +46,35 @@ st.markdown(
             margin: 0 !important;
             font-size: 0.95rem !important;
         }
-        div[data-testid="stMetric"] {
-            background-color: #ffffff;
-            border: 1px solid #e2e8f0;
-            padding: 0.85rem 1rem;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
-        }
-        div[data-testid="stMetric"] label {
-            color: #475569 !important;
-        }
-        div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-            color: #0f172a !important;
-        }
         .rozet-yuksek {
             display: inline-block;
             background-color: #fee2e2;
             color: #991b1b;
             border: 1px solid #fca5a5;
-            padding: 0.3rem 0.75rem;
+            padding: 0.32rem 0.78rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.86rem;
+            font-size: 0.88rem;
         }
         .rozet-orta {
             display: inline-block;
             background-color: #fef3c7;
             color: #92400e;
             border: 1px solid #fcd34d;
-            padding: 0.3rem 0.75rem;
+            padding: 0.32rem 0.78rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.86rem;
+            font-size: 0.88rem;
         }
         .rozet-dusuk {
             display: inline-block;
             background-color: #dcfce7;
             color: #166534;
             border: 1px solid #86efac;
-            padding: 0.3rem 0.75rem;
+            padding: 0.32rem 0.78rem;
             border-radius: 999px;
             font-weight: 700;
-            font-size: 0.86rem;
+            font-size: 0.88rem;
         }
         .alt-bilgi {
             margin-top: 1.5rem;
@@ -106,46 +93,26 @@ st.markdown(
 MODEL_YOLU = "rf_kacak_suphe_final.joblib"
 
 ONEMLI_5_SUTUN = [
-    "tuketim_yaz_m3",
     "tuketim_kis_m3",
+    "hane_buyuklugu",
+    "tuketim_yaz_m3",
     "sayac_yasi",
     "abone_tipi",
-    "sayac_tipi",
 ]
 
 ETIKETLER = {
-    "tuketim_yaz_m3": "Yaz Dönemi Tüketimi (m³)",
     "tuketim_kis_m3": "Kış Dönemi Tüketimi (m³)",
+    "hane_buyuklugu": "Hane Büyüklüğü (Kişi)",
+    "tuketim_yaz_m3": "Yaz Dönemi Tüketimi (m³)",
     "sayac_yasi": "Sayaç Yaşı (Yıl)",
     "abone_tipi": "Abone Tipi",
-    "sayac_tipi": "Sayaç Tipi",
 }
 
-# Ekrandaki metin -> Verideki sayısal kod eşleşmesi (kendi verinize göre düzenleyin)
-ABONE_TIPI_MAP = {
-    "Konut": 0,
-    "Tarım-Hayvancılık": 1,
-    "İşyeri": 2,
-    "Resmi": 3,
-    "Sanayi": 4,
-}
-
-SAYAC_TIPI_MAP = {
-    "Mekanik": 0,
-    "Akıllı": 1,
-}
-
-KOD_SOZLUKLERI = {
-    "abone_tipi": ABONE_TIPI_MAP,
-    "sayac_tipi": SAYAC_TIPI_MAP,
-}
-
-# Görsel kıyas için referans medyan değerler
 REFERANS_TUKETIM = {
-    "normal_yaz": 14.8,
     "normal_kis": 11.0,
-    "riskli_yaz": 8.3,
+    "normal_yaz": 14.8,
     "riskli_kis": 5.9,
+    "riskli_yaz": 8.3,
 }
 
 
@@ -163,8 +130,9 @@ except FileNotFoundError:
 pipe = paket["pipeline"]
 beklenen_sutunlar = paket["ozellik_sutunlari"]
 ornek_degerler = paket.get("ornek_degerler", {})
-yuksek_esik = float(paket.get("esik", 0.50))
-orta_esik = float(paket.get("orta_risk_esigi", 0.20))
+yuksek_esik = float(paket.get("esik", 0.62))
+orta_esik = float(paket.get("orta_risk_esigi", 0.25))
+test_f1 = float(paket.get("test_f1", 0.6786))
 
 if "sorgu_gecmisi" not in st.session_state:
     st.session_state["sorgu_gecmisi"] = []
@@ -176,13 +144,30 @@ def varsayilan_satir_olustur() -> dict:
         meta = ornek_degerler.get(col)
         if meta and meta.get("tip") == "kat":
             secenekler = meta.get("secenekler", [])
-            satir[col] = secenekler[0] if secenekler else 0
+            satir[col] = secenekler[0] if secenekler else ""
         elif meta and meta.get("tip") == "num":
             val = meta.get("medyan", 0)
             satir[col] = int(round(val)) if meta.get("is_int") else round(float(val), 2)
         else:
             satir[col] = 0
     return satir
+
+
+def senaryo_uygula(kis: float, hane: int, yaz: float, yas: int, abone_adaylari: list[str]):
+    st.session_state["tuketim_kis_m3"] = kis
+    st.session_state["hane_buyuklugu"] = hane
+    st.session_state["tuketim_yaz_m3"] = yaz
+    st.session_state["sayac_yasi"] = yas
+
+    kat_meta = ornek_degerler.get("abone_tipi", {})
+    secenekler = kat_meta.get("secenekler", [])
+    if secenekler:
+        for aday in abone_adaylari:
+            if aday in secenekler:
+                st.session_state["abone_tipi"] = aday
+                break
+        else:
+            st.session_state["abone_tipi"] = secenekler[0]
 
 
 def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> go.Figure:
@@ -223,11 +208,11 @@ def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> 
     return fig
 
 
-def powerbi_tuketim_grafigi(yaz_val: float, kis_val: float) -> go.Figure:
-    donemler = ["Yaz Dönemi", "Kış Dönemi"]
-    girilen = [yaz_val, kis_val]
-    normal = [REFERANS_TUKETIM["normal_yaz"], REFERANS_TUKETIM["normal_kis"]]
-    riskli = [REFERANS_TUKETIM["riskli_yaz"], REFERANS_TUKETIM["riskli_kis"]]
+def powerbi_tuketim_grafigi(kis_val: float, yaz_val: float) -> go.Figure:
+    donemler = ["Kış Dönemi", "Yaz Dönemi"]
+    girilen = [kis_val, yaz_val]
+    normal = [REFERANS_TUKETIM["normal_kis"], REFERANS_TUKETIM["normal_yaz"]]
+    riskli = [REFERANS_TUKETIM["riskli_kis"], REFERANS_TUKETIM["riskli_yaz"]]
 
     fig = go.Figure()
     fig.add_trace(
@@ -297,10 +282,10 @@ def powerbi_tuketim_grafigi(yaz_val: float, kis_val: float) -> go.Figure:
 
 # Üst Kurumsal Banner
 st.markdown(
-    """
+    f"""
     <div class="ust-banner">
         <h1>💧 Kaçak Su Risk Analiz ve Saha Öncelik Paneli</h1>
-        <p>Abone tüketim profili, sayaç yaşı ve abone tipine göre kaçak şüphe skorunu anlık puanlayan saha karar destek ekranı</p>
+        <p>Kış/yaz tüketimi, hane büyüklüğü ve sayaç sinyalleriyle kaçak şüphesini puanlayan karar destek paneli • Karar Eşiği: %{yuksek_esik*100:.0f} • Test F1: {test_f1:.4f}</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -312,29 +297,17 @@ girdiler = {}
 secilen_etiketler = {}
 
 with sol_panel:
-    st.subheader("1. Abone Bilgileri ve Hazır Senaryolar")
+    st.subheader("1. Kritik Abone Girdileri ve Senaryolar")
 
     col_s1, col_s2, col_s3 = st.columns(3)
     if col_s1.button("🔴 Yüksek Risk", use_container_width=True):
-        st.session_state["tuketim_yaz_m3"] = 2.5
-        st.session_state["tuketim_kis_m3"] = 1.5
-        st.session_state["sayac_yasi"] = 17
-        st.session_state["abone_tipi"] = "Tarım-Hayvancılık"
-        st.session_state["sayac_tipi"] = "Mekanik"
+        senaryo_uygula(1.5, 6, 3.0, 17, ["Tarım-Hayvancılık", "Sanayi", "İşyeri"])
 
     if col_s2.button("🟡 Orta Risk", use_container_width=True):
-        st.session_state["tuketim_yaz_m3"] = 8.5
-        st.session_state["tuketim_kis_m3"] = 6.5
-        st.session_state["sayac_yasi"] = 11
-        st.session_state["abone_tipi"] = "Konut"
-        st.session_state["sayac_tipi"] = "Mekanik"
+        senaryo_uygula(6.5, 4, 9.0, 11, ["Konut", "İşyeri"])
 
     if col_s3.button("🟢 Düşük Risk", use_container_width=True):
-        st.session_state["tuketim_yaz_m3"] = 17.5
-        st.session_state["tuketim_kis_m3"] = 13.0
-        st.session_state["sayac_yasi"] = 3
-        st.session_state["abone_tipi"] = "Konut"
-        st.session_state["sayac_tipi"] = "Akıllı"
+        senaryo_uygula(13.0, 3, 17.5, 3, ["Konut"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -344,18 +317,11 @@ with sol_panel:
         baslik = ETIKETLER.get(col, col)
         meta = ornek_degerler.get(col, {})
 
-        if col in KOD_SOZLUKLERI:
-            sozluk = KOD_SOZLUKLERI[col]
-            secenek_isimleri = list(sozluk.keys())
-            mevcut_isim = st.session_state.get(col, secenek_isimleri[0])
-            idx = secenek_isimleri.index(mevcut_isim) if mevcut_isim in secenek_isimleri else 0
-            secilen_isim = st.selectbox(baslik, options=secenek_isimleri, index=idx, key=f"inp_{col}")
-            girdiler[col] = sozluk[secilen_isim]
-            secilen_etiketler[col] = secilen_isim
-
-        elif meta.get("tip") == "kat":
+        if meta.get("tip") == "kat":
             secenekler = meta.get("secenekler", [])
-            mevcut = st.session_state.get(col, secenekler[0] if secenekler else "")
+            if not secenekler:
+                secenekler = ["Konut"]
+            mevcut = st.session_state.get(col, secenekler[0])
             idx = secenekler.index(mevcut) if mevcut in secenekler else 0
             secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
             girdiler[col] = secilen
@@ -393,7 +359,7 @@ with sol_panel:
     tahmin_basildi = st.button("🚀 Risk Skorunu Hesapla", type="primary", use_container_width=True)
 
 with sag_panel:
-    st.subheader("2. Power BI Görünümlü Risk ve Tüketim Paneli")
+    st.subheader("2. Risk Değerlendirmesi ve Tüketim Görünümü")
 
     tam_satir = varsayilan_satir_olustur()
     tam_satir.update(girdiler)
@@ -405,17 +371,17 @@ with sag_panel:
         rozet_html = '<span class="rozet-yuksek">● YÜKSEK RİSK</span>'
         aksiyon = "Öncelikli saha denetimi, sayaç bağlantısı ve hat/mühür kontrolü önerilir."
         kontrol_maddeleri = [
-            "Sayaç önü bağlantı ve by-pass / hat müdahalesi kontrolü",
-            "Sayaç camı, mühür ve fiziksel hasar incelemesi",
-            "Son 12 aylık dönemlik tüketim sapmasının sahada doğrulanması",
+            "Düşük kış/yaz tüketimi ve hane büyüklüğü uyumsuzluğunun sahada kontrolü",
+            "Sayaç önü bağlantı, mühür ve olası by-pass / hat müdahalesi incelemesi",
+            "Sayaç yaşı ve abone grubu dikkate alınarak yerinde ölçüm doğrulaması",
         ]
     elif olas >= orta_esik:
         risk_etiket = "Orta Risk"
         rozet_html = '<span class="rozet-orta">● ORTA RİSK</span>'
         aksiyon = "İzleme listesine alınıp saha ekibi kapasitesine göre ikincil kontrol planlanabilir."
         kontrol_maddeleri = [
-            "Önümüzdeki okuma döneminde tüketim artış/azalış takibi",
-            "Sayaç yaşı ve tipi dikkate alınarak rutin kontrol sırasına ekleme",
+            "Önümüzdeki okuma döneminde tüketim ve hane profili değişiminin izlenmesi",
+            "Sayaç yaşı ve abone tipine göre rutin kontrol sırasına ekleme",
         ]
     else:
         risk_etiket = "Düşük Risk"
@@ -430,10 +396,10 @@ with sag_panel:
             0,
             {
                 "Abone Tipi": secilen_etiketler.get("abone_tipi", "-"),
-                "Sayaç Tipi": secilen_etiketler.get("sayac_tipi", "-"),
-                "Sayaç Yaşı": secilen_etiketler.get("sayac_yasi", "-"),
-                "Yaz (m³)": secilen_etiketler.get("tuketim_yaz_m3", "-"),
                 "Kış (m³)": secilen_etiketler.get("tuketim_kis_m3", "-"),
+                "Hane": secilen_etiketler.get("hane_buyuklugu", "-"),
+                "Yaz (m³)": secilen_etiketler.get("tuketim_yaz_m3", "-"),
+                "Sayaç Yaşı": secilen_etiketler.get("sayac_yasi", "-"),
                 "Risk (%)": round(olas * 100, 1),
                 "Kademe": risk_etiket,
             },
@@ -454,13 +420,13 @@ with sag_panel:
     st.markdown("<br>", unsafe_allow_html=True)
     st.plotly_chart(
         powerbi_tuketim_grafigi(
-            float(girdiler.get("tuketim_yaz_m3", 0)),
             float(girdiler.get("tuketim_kis_m3", 0)),
+            float(girdiler.get("tuketim_yaz_m3", 0)),
         ),
         use_container_width=True,
     )
 
-    with st.expander("Modele gönderilen sayısal kod ve girdi özeti"):
+    with st.expander("Modele gönderilen 5 temel değişken"):
         st.json({ETIKETLER.get(k, k): v for k, v in girdiler.items()})
 
 if st.session_state["sorgu_gecmisi"]:
@@ -486,9 +452,9 @@ if st.session_state["sorgu_gecmisi"]:
     )
 
 st.markdown(
-    """
+    f"""
     <div class="alt-bilgi">
-        Karar Destek Modeli: Random Forest Sınıflandırıcı • Test ROC-AUC: 0.92 • Canlı Eşik ve Saha Önceliklendirme Ekranı
+        Karar Destek Modeli: Random Forest Sınıflandırıcı • Test F1: {test_f1:.4f} • Yüksek Risk Eşiği: %{yuksek_esik*100:.0f}
     </div>
     """,
     unsafe_allow_html=True,
