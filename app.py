@@ -160,7 +160,7 @@ def senaryo_uygula(kis: float, hane: int, yaz: float, yas: int, abone_adaylari: 
     st.session_state["sayac_yasi"] = yas
 
     kat_meta = ornek_degerler.get("abone_tipi", {})
-    secenekler = kat_meta.get("secenekler", [])
+    secenekler = [str(x) for x in kat_meta.get("secenekler", [])]
     if secenekler:
         for aday in abone_adaylari:
             if aday in secenekler:
@@ -317,15 +317,29 @@ with sol_panel:
         baslik = ETIKETLER.get(col, col)
         meta = ornek_degerler.get(col, {})
 
-        if meta.get("tip") == "kat":
-            secenekler = meta.get("secenekler", [])
-            if not secenekler:
-                secenekler = ["Konut"]
-            mevcut = st.session_state.get(col, secenekler[0])
+        if col == "abone_tipi":
+            secenekler = [str(x) for x in meta.get("secenekler") or [
+                "Konut",
+                "Tarım-Hayvancılık",
+                "İşyeri",
+                "Resmi",
+                "Sanayi",
+            ]]
+            mevcut = str(st.session_state.get(col, secenekler[0]))
             idx = secenekler.index(mevcut) if mevcut in secenekler else 0
             secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
             girdiler[col] = secilen
-            secilen_etiketler[col] = str(secilen)
+            secilen_etiketler[col] = secilen
+
+        elif meta.get("tip") == "kat":
+            secenekler = [str(x) for x in meta.get("secenekler", [])]
+            if not secenekler:
+                secenekler = ["Varsayılan"]
+            mevcut = str(st.session_state.get(col, secenekler[0]))
+            idx = secenekler.index(mevcut) if mevcut in secenekler else 0
+            secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
+            girdiler[col] = secilen
+            secilen_etiketler[col] = secilen
 
         else:
             is_int = bool(meta.get("is_int", False))
@@ -349,113 +363,4 @@ with sol_panel:
                     baslik,
                     min_value=round(float(min_v), 2),
                     max_value=round(float(max_v), 2),
-                    value=max(round(float(min_v), 2), min(round(float(max_v), 2), varsayilan_val)),
-                    step=0.5,
-                    key=f"inp_{col}",
-                )
-            girdiler[col] = val
-            secilen_etiketler[col] = val
-
-    tahmin_basildi = st.button("🚀 Risk Skorunu Hesapla", type="primary", use_container_width=True)
-
-with sag_panel:
-    st.subheader("2. Risk Değerlendirmesi ve Tüketim Görünümü")
-
-    tam_satir = varsayilan_satir_olustur()
-    tam_satir.update(girdiler)
-    df_model = pd.DataFrame([tam_satir])[beklenen_sutunlar]
-    olas = float(pipe.predict_proba(df_model)[:, 1][0])
-
-    if olas >= yuksek_esik:
-        risk_etiket = "Yüksek Risk"
-        rozet_html = '<span class="rozet-yuksek">● YÜKSEK RİSK</span>'
-        aksiyon = "Öncelikli saha denetimi, sayaç bağlantısı ve hat/mühür kontrolü önerilir."
-        kontrol_maddeleri = [
-            "Düşük kış/yaz tüketimi ve hane büyüklüğü uyumsuzluğunun sahada kontrolü",
-            "Sayaç önü bağlantı, mühür ve olası by-pass / hat müdahalesi incelemesi",
-            "Sayaç yaşı ve abone grubu dikkate alınarak yerinde ölçüm doğrulaması",
-        ]
-    elif olas >= orta_esik:
-        risk_etiket = "Orta Risk"
-        rozet_html = '<span class="rozet-orta">● ORTA RİSK</span>'
-        aksiyon = "İzleme listesine alınıp saha ekibi kapasitesine göre ikincil kontrol planlanabilir."
-        kontrol_maddeleri = [
-            "Önümüzdeki okuma döneminde tüketim ve hane profili değişiminin izlenmesi",
-            "Sayaç yaşı ve abone tipine göre rutin kontrol sırasına ekleme",
-        ]
-    else:
-        risk_etiket = "Düşük Risk"
-        rozet_html = '<span class="rozet-dusuk">● DÜŞÜK RİSK</span>'
-        aksiyon = "Ek saha müdahalesi gerektirmeyen olağan tüketim profili."
-        kontrol_maddeleri = [
-            "Olağan periyodik sayaç okuma ve faturalandırma akışı sürdürülür",
-        ]
-
-    if tahmin_basildi:
-        st.session_state["sorgu_gecmisi"].insert(
-            0,
-            {
-                "Abone Tipi": secilen_etiketler.get("abone_tipi", "-"),
-                "Kış (m³)": secilen_etiketler.get("tuketim_kis_m3", "-"),
-                "Hane": secilen_etiketler.get("hane_buyuklugu", "-"),
-                "Yaz (m³)": secilen_etiketler.get("tuketim_yaz_m3", "-"),
-                "Sayaç Yaşı": secilen_etiketler.get("sayac_yasi", "-"),
-                "Risk (%)": round(olas * 100, 1),
-                "Kademe": risk_etiket,
-            },
-        )
-
-    g_sol, g_sag = st.columns([0.9, 1.2], gap="medium")
-    with g_sol:
-        st.plotly_chart(powerbi_risk_kadran(olas, orta_esik, yuksek_esik), use_container_width=True)
-        st.markdown(f"<div style='text-align:center;'>{rozet_html}</div>", unsafe_allow_html=True)
-    with g_sag:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.info(f"**Saha Önerisi:** {aksiyon}")
-        with st.container(border=True):
-            st.markdown("**Saha Kontrol Odakları**")
-            for madde in kontrol_maddeleri:
-                st.markdown(f"- {madde}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.plotly_chart(
-        powerbi_tuketim_grafigi(
-            float(girdiler.get("tuketim_kis_m3", 0)),
-            float(girdiler.get("tuketim_yaz_m3", 0)),
-        ),
-        use_container_width=True,
-    )
-
-    with st.expander("Modele gönderilen 5 temel değişken"):
-        st.json({ETIKETLER.get(k, k): v for k, v in girdiler.items()})
-
-if st.session_state["sorgu_gecmisi"]:
-    st.divider()
-    gecmis_bas, gecmis_but = st.columns([3, 1])
-    with gecmis_bas:
-        st.subheader("3. Sunum Sorgu Geçmişi")
-    with gecmis_but:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🗑️ Geçmişi Temizle", use_container_width=True):
-            st.session_state["sorgu_gecmisi"] = []
-            st.rerun()
-
-    df_gecmis = pd.DataFrame(st.session_state["sorgu_gecmisi"])
-    st.dataframe(df_gecmis, use_container_width=True, hide_index=True)
-
-    csv_bytes = df_gecmis.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="⬇️ Sorgu Geçmişini CSV İndir",
-        data=csv_bytes,
-        file_name="kacak_risk_sorgu_gecmisi.csv",
-        mime="text/csv",
-    )
-
-st.markdown(
-    f"""
-    <div class="alt-bilgi">
-        Karar Destek Modeli: Random Forest Sınıflandırıcı • Test F1: {test_f1:.4f} • Yüksek Risk Eşiği: %{yuksek_esik*100:.0f}
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+                    value=max(round(float(min_v), 2), min(
