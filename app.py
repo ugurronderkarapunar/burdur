@@ -228,6 +228,21 @@ st.markdown(
             font-weight: 800;
             font-size: 0.84rem;
         }
+        .kontrol-liste {
+            list-style: none;
+            padding-left: 0;
+            margin: 0.35rem 0 0 0;
+        }
+        .kontrol-liste li {
+            padding: 0.42rem 0.65rem;
+            margin-bottom: 0.4rem;
+            border-radius: 8px;
+            background-color: #f8fafc !important;
+            border: 1px solid #e2e8f0;
+            font-size: 0.88rem;
+            color: #0f172a !important;
+            line-height: 1.4;
+        }
         .footer-bar {
             margin-top: 1.2rem;
             padding: 0.9rem 1.2rem;
@@ -356,18 +371,57 @@ def aylik_parasal_karsilik_hesapla(
     birim_tarife_tl: float,
     ek_kacak_hacim_m3: float,
 ) -> tuple[float, float, float]:
-    # Hane büyüklüğüne göre beklenen aylık ortalama tüketim (m3/ay)
     beklenen_aylik_m3 = max(hane_sayisi, 1) * 4.2
     mevcut_ortalama_m3 = (float(kis_m3) + float(yaz_m3)) / 2.0
     tuketim_acigi_m3 = max(0.0, beklenen_aylik_m3 - mevcut_ortalama_m3)
-
-    # Tahmini kaçak hacim: tüketim açığı + varsayılan ek kaçak/bypass hacmi
     tahmini_kacak_m3 = round(tuketim_acigi_m3 + float(ek_kacak_hacim_m3), 2)
-
-    # Olasılık ağırlıklı beklenen aylık parasal karşılık (TL/ay)
     aylik_tl = round(tahmini_kacak_m3 * float(birim_tarife_tl) * float(olasilik), 2)
     yillik_tl = round(aylik_tl * 12.0, 2)
     return aylik_tl, yillik_tl, tahmini_kacak_m3
+
+
+def dinamik_saha_kontrol_listesi(
+    seviye: str,
+    ilce: str,
+    abone_tipi: str,
+    kis_m3: float,
+    yaz_m3: float,
+    hane_sayisi: int,
+    sayac_yasi: int,
+) -> list[str]:
+    beklenen_m3 = max(hane_sayisi, 1) * 4.2
+    ort_tuketim = (kis_m3 + yaz_m3) / 2.0
+    uyum_notu = (
+        f"Hane-tüketim uyumu: {hane_sayisi} kişilik hane için beklenen ~{beklenen_m3:.1f} m³ yerine ortalama {ort_tuketim:.1f} m³ tüketim görünüyor."
+        if ort_tuketim < beklenen_m3
+        else f"Hane-tüketim uyumu: {hane_sayisi} kişilik hane için ortalama {ort_tuketim:.1f} m³ tüketim kaydedilmiş."
+    )
+    sayac_notu = (
+        f"Sayaç yaşı ({sayac_yasi} yıl): Yaşlı/yıpranmış sayaç ihtimaline karşı kalibrasyon ve mekanik durma kontrolü yapın."
+        if sayac_yasi >= 10
+        else f"Sayaç yaşı ({sayac_yasi} yıl): Sayaç yaşı görece yeni; bağlantı bütünlüğü ve mühür durumuna odaklanın."
+    )
+
+    if seviye == "yuksek":
+        return [
+            f"<b>Sayaç mührü ve gövde:</b> {ilce} / {abone_tipi} abonesinde mühür kopukluğu, ters sayaç veya cam/kadran müdahalesini kontrol edin.",
+            "<b>By-pass ve hat kontrolü:</b> Sayaç öncesi/sonrası kaçak hat, by-pass bağlantısı veya şebeke dışı paralel çekiş olup olmadığını inceleyin.",
+            f"<b>{uyum_notu}</b>",
+            f"<b>{sayac_notu}</b>",
+        ]
+    if seviye == "orta":
+        return [
+            f"<b>Sayaç mührü kontrolü:</b> Rutin denetimde {ilce} abonesinin sayaç mühür ve bağlantı kelepçelerini gözle kontrol edin.",
+            "<b>Hat güzergâhı gözlemi:</b> Bahçe, ahır/işlik veya ek yapı yönüne giden şüpheli boru hattı bulunup bulunmadığına bakın.",
+            f"<b>{uyum_notu}</b>",
+            f"<b>{sayac_notu}</b>",
+        ]
+    return [
+        f"<b>Rutin sayaç okuma:</b> {ilce} abonesi için olağan periyodik okuma ve kayıt doğrulaması yapın.",
+        "<b>Görsel mühür teyidi:</b> Okuma sırasında mühürde bariz hasar veya sızıntı varsa not düşün.",
+        f"<b>{uyum_notu}</b>",
+        f"<b>{sayac_notu}</b>",
+    ]
 
 
 def folium_ilce_haritasi(ilce_adi: str, olas_val: float, risk_etiket: str, aylik_tl: float) -> folium.Map:
@@ -485,7 +539,6 @@ if "birim_tarife_tl" not in st.session_state:
 if "ek_kacak_hacim_m3" not in st.session_state:
     st.session_state["ek_kacak_hacim_m3"] = 5.0
 
-# Canlı model tahmini
 satir = dict(varsayilan)
 for col in ONEMLI_SUTUNLAR:
     satir[col] = st.session_state[col]
@@ -499,14 +552,29 @@ except Exception as e:
 
 etiket, seviye = risk_kademesi(olasilik)
 aktif_ilce = st.session_state["ilce"]
+aktif_abone = st.session_state["abone_tipi"]
+aktif_kis = st.session_state["tuketim_kis_m3"]
+aktif_yaz = st.session_state["tuketim_yaz_m3"]
+aktif_hane = st.session_state["hane_buyuklugu"]
+aktif_yas = st.session_state["sayac_yasi"]
 
 aylik_tl, yillik_tl, tahmini_kacak_m3 = aylik_parasal_karsilik_hesapla(
-    kis_m3=st.session_state["tuketim_kis_m3"],
-    yaz_m3=st.session_state["tuketim_yaz_m3"],
-    hane_sayisi=st.session_state["hane_buyuklugu"],
+    kis_m3=aktif_kis,
+    yaz_m3=aktif_yaz,
+    hane_sayisi=aktif_hane,
     olasilik=olasilik,
     birim_tarife_tl=st.session_state["birim_tarife_tl"],
     ek_kacak_hacim_m3=st.session_state["ek_kacak_hacim_m3"],
+)
+
+kontrol_maddeleri = dinamik_saha_kontrol_listesi(
+    seviye=seviye,
+    ilce=aktif_ilce,
+    abone_tipi=aktif_abone,
+    kis_m3=aktif_kis,
+    yaz_m3=aktif_yaz,
+    hane_sayisi=aktif_hane,
+    sayac_yasi=aktif_yas,
 )
 
 st.markdown(
@@ -514,7 +582,7 @@ st.markdown(
     <div class="hero-card">
         <div class="hero-badge">BURDUR • SU ŞEBEKESİ</div>
         <div class="hero-title">Kaçak Su Risk Analiz ve Saha Öncelik Paneli</div>
-        <p class="hero-sub">Girdiler değiştikçe kaçak şüphesi olasılığını ve tahmini aylık parasal karşılığı anlık hesaplar.</p>
+        <p class="hero-sub">Girdiler değiştikçe kaçak şüphesi olasılığını, tahmini aylık parasal karşılığı ve saha kontrol maddelerini anlık günceller.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -581,11 +649,11 @@ if gecmise_ekle:
     st.session_state["sorgu_gecmisi"].append(
         {
             "İlçe": aktif_ilce,
-            "Abone Tipi": st.session_state["abone_tipi"],
-            "Kış (m³)": st.session_state["tuketim_kis_m3"],
-            "Yaz (m³)": st.session_state["tuketim_yaz_m3"],
-            "Hane": st.session_state["hane_buyuklugu"],
-            "Sayaç Yaşı": st.session_state["sayac_yasi"],
+            "Abone Tipi": aktif_abone,
+            "Kış (m³)": aktif_kis,
+            "Yaz (m³)": aktif_yaz,
+            "Hane": aktif_hane,
+            "Sayaç Yaşı": aktif_yas,
             "Risk (%)": round(olasilik * 100, 1),
             "Tahmini Aylık (TL)": round(aylik_tl, 0),
             "Kademe": etiket,
@@ -594,7 +662,7 @@ if gecmise_ekle:
 
 with sag:
     with st.container(border=True):
-        st.markdown('<div class="panel-title">Canlı Risk ve Parasal Karşılık Sonucu</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">Canlı Risk, Saha Kontrol Listesi ve Parasal Karşılık</div>', unsafe_allow_html=True)
         st.plotly_chart(
             powerbi_risk_kadran(olasilik, orta_esik, yuksek_esik),
             use_container_width=True,
@@ -614,6 +682,11 @@ with sag:
             """,
             unsafe_allow_html=True,
         )
+        st.write("")
+        st.markdown(f"**Saha Kontrol Kontrol Listesi ({etiket})**")
+        liste_html = "<ul class='kontrol-liste'>" + "".join(f"<li>✓ {m}</li>" for m in kontrol_maddeleri) + "</ul>"
+        st.markdown(liste_html, unsafe_allow_html=True)
+
         st.markdown(
             f"""
             <div class="finans-card">
