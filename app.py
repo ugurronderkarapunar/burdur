@@ -593,9 +593,6 @@ tab_tekil, tab_toplu = st.tabs([
     "📋 Toplu Yükleme & Haftalık Saha Planı",
 ])
 
-# ==============================================================================
-# SEKME 1: MEVCUT TEKİL ABONE ANALİZİ
-# ==============================================================================
 with tab_tekil:
     satir = dict(varsayilan)
     for col in ONEMLI_SUTUNLAR:
@@ -779,10 +776,6 @@ with tab_tekil:
             else:
                 st.caption("İstediğiniz an 'Mevcut senaryoyu geçmişe kaydet' ile karşılaştırma satırı ekleyebilirsiniz.")
 
-
-# ==============================================================================
-# SEKME 2: TOPLU YÜKLEME, HAFTALIK SAHA LİSTESİ & NET KAZANÇ ÖZETİ (1 & 2)
-# ==============================================================================
 with tab_toplu:
     with st.container(border=True):
         st.markdown('<div class="panel-title">1. Tüm Abone Dosyasını Yükle ve Haftalık Saha Listesi Oluştur</div>', unsafe_allow_html=True)
@@ -823,7 +816,6 @@ with tab_toplu:
             if df_ham is not None and not df_ham.empty:
                 df_calisma = df_ham.copy()
 
-                # Sayısal ve kategorik sütunları güvenli hazırla
                 if "ilce" not in df_calisma.columns:
                     df_calisma["ilce"] = ilce_secenekleri[0]
                 else:
@@ -863,13 +855,9 @@ with tab_toplu:
                     df_sonuc["risk_olasiligi"] = olas_dizi
                     df_sonuc["risk_skoru_%"] = np.round(olas_dizi * 100.0, 1)
 
-                    kademe_etiketleri = []
-                    for p_val in olas_dizi:
-                        k_et, _ = risk_kademesi(float(p_val))
-                        kademe_etiketleri.append(k_et)
+                    kademe_etiketleri = [risk_kademesi(float(p_val))[0] for p_val in olas_dizi]
                     df_sonuc["risk_kademesi"] = kademe_etiketleri
 
-                    # Risk sırasına göre sırala
                     df_sirali = df_sonuc.sort_values(by="risk_olasiligi", ascending=False).reset_index(drop=True)
                     df_sirali.insert(0, "saha_sirasi", np.arange(1, len(df_sirali) + 1))
 
@@ -917,7 +905,6 @@ with tab_toplu:
                     haftalik_hedef = min(int(gunluk_kapasite) * int(haftalik_gun), len(df_sirali))
                     haftalik_liste = df_sirali.head(haftalik_hedef).copy()
 
-                    # Her abone için aylık/yıllık tahmini geri kazanım hesabı
                     aylik_kazanim_list = []
                     yillik_kazanim_list = []
                     for _, row in haftalik_liste.iterrows():
@@ -935,13 +922,10 @@ with tab_toplu:
                     haftalik_liste["tahmini_aylik_kazanim_tl"] = aylik_kazanim_list
                     haftalik_liste["tahmini_yillik_kazanim_tl"] = yillik_kazanim_list
 
-                    # 2. NET KAZANÇ VE GERİ DÖNÜŞ ÖZETİ (İYİMSER & TEMKİNLİ)
-                    # Haftalık kontrol edilen listenin ilk 1 aylık karşılığı üzerinden haftalık/aylık kıyas
                     iyimser_aylik_geri_kazanim = float(haftalik_liste["tahmini_aylik_kazanim_tl"].sum())
                     temkinli_aylik_geri_kazanim = iyimser_aylik_geri_kazanim * (float(temkinli_oran_pct) / 100.0)
 
                     haftalik_saha_maliyeti = float(haftalik_gun) * float(gunluk_ekip_maliyeti)
-                    # Aylık (4 haftalık) saha maliyeti karşılığı ile aylık geri kazanım neti:
                     aylik_saha_maliyeti = haftalik_saha_maliyeti * 4.0
 
                     net_temkinli_aylik = temkinli_aylik_geri_kazanim - aylık_saha_maliyeti
