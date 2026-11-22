@@ -12,7 +12,7 @@ if not hasattr(_ct, "_RemainderColsList"):
     _ct._RemainderColsList = _RemainderColsList
 
 st.set_page_config(
-    page_title="Kaçak Su Risk Analiz ve Karar Paneli",
+    page_title="Kaçak Su Risk Analiz ve Saha Öncelik Paneli",
     page_icon="💧",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -22,14 +22,80 @@ st.markdown(
     """
     <style>
         .block-container {
-            padding-top: 1.6rem;
-            padding-bottom: 2rem;
+            padding-top: 1.3rem;
+            padding-bottom: 2.2rem;
+            max-width: 1280px;
+        }
+        .ust-banner {
+            background: linear-gradient(120deg, #0f2942 0%, #155e75 65%, #0e7490 100%);
+            color: #ffffff;
+            padding: 1.35rem 1.6rem;
+            border-radius: 14px;
+            margin-bottom: 1.1rem;
+            box-shadow: 0 8px 24px rgba(15, 41, 66, 0.14);
+        }
+        .ust-banner h1 {
+            color: #ffffff !important;
+            font-size: 1.65rem !important;
+            margin: 0 0 0.3rem 0 !important;
+            font-weight: 700 !important;
+        }
+        .ust-banner p {
+            color: #e0f2fe !important;
+            margin: 0 !important;
+            font-size: 0.95rem !important;
         }
         div[data-testid="stMetric"] {
-            background-color: rgba(28, 131, 225, 0.06);
-            border: 1px solid rgba(28, 131, 225, 0.18);
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
             padding: 0.85rem 1rem;
-            border-radius: 0.65rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        }
+        div[data-testid="stMetric"] label {
+            color: #475569 !important;
+        }
+        div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+            color: #0f172a !important;
+        }
+        .rozet-yuksek {
+            display: inline-block;
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+            padding: 0.32rem 0.75rem;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+        .rozet-orta {
+            display: inline-block;
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+            padding: 0.32rem 0.75rem;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+        .rozet-dusuk {
+            display: inline-block;
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+            padding: 0.32rem 0.75rem;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+        .alt-bilgi {
+            margin-top: 1.5rem;
+            padding: 0.85rem 1.1rem;
+            border-radius: 10px;
+            background-color: #f1f5f9;
+            color: #334155;
+            font-size: 0.86rem;
+            text-align: center;
         }
     </style>
     """,
@@ -54,7 +120,6 @@ ETIKETLER = {
     "sayac_tipi": "Sayaç Tipi",
 }
 
-# Ekrandaki metin -> Verideki sayısal kod eşleşmesi (kendi verinize göre düzenleyin)
 ABONE_TIPI_MAP = {
     "Konut": 0,
     "Tarım-Hayvancılık": 1,
@@ -73,7 +138,6 @@ KOD_SOZLUKLERI = {
     "sayac_tipi": SAYAC_TIPI_MAP,
 }
 
-# Görsel kıyas için referans medyan değerler
 REFERANS_TUKETIM = {
     "normal_yaz": 14.8,
     "normal_kis": 11.0,
@@ -118,25 +182,51 @@ def varsayilan_satir_olustur() -> dict:
     return satir
 
 
-# Üst Başlık Bandı
-bas_sol, bas_sag = st.columns([3, 1])
-with bas_sol:
-    st.title("💧 Kaçak Su Risk Analiz ve Saha Öncelik Paneli")
-    st.caption("5 kritik abone ve tüketim göstergesi üzerinden hızlı kaçak şüphe değerlendirmesi")
-with bas_sag:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.info(f"**Aktif Eşikler**\n\nOrta: `%{orta_esik*100:.0f}` • Yüksek: `%{yuksek_esik*100:.0f}`")
+def risk_skala_html(olas_val: float, orta_val: float, yuksek_val: float) -> str:
+    pct = min(max(olas_val * 100.0, 0.0), 100.0)
+    orta_pct = min(max(orta_val * 100.0, 1.0), 95.0)
+    yuksek_pct = min(max(yuksek_val * 100.0, orta_pct + 2.0), 99.0)
+    d_w = orta_pct
+    o_w = max(yuksek_pct - orta_pct, 1.0)
+    y_w = max(100.0 - yuksek_pct, 1.0)
 
-st.divider()
+    return f"""
+    <div style="margin: 0.4rem 0 0.8rem 0;">
+        <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#64748b; margin-bottom:4px;">
+            <span>Düşük (&lt;%{orta_pct:.0f})</span>
+            <span>Orta (%{orta_pct:.0f}–%{yuksek_pct:.0f})</span>
+            <span>Yüksek (≥%{yuksek_pct:.0f})</span>
+        </div>
+        <div style="position:relative; height:12px; border-radius:999px; overflow:hidden; display:flex; border:1px solid #cbd5e1;">
+            <div style="width:{d_w}%; background:#86efac;"></div>
+            <div style="width:{o_w}%; background:#fde047;"></div>
+            <div style="width:{y_w}%; background:#fca5a5;"></div>
+        </div>
+        <div style="position:relative; height:14px; margin-top:2px;">
+            <div style="position:absolute; left:calc({pct}% - 6px); font-size:0.8rem; color:#0f172a; font-weight:700;">▲ %{pct:.1f}</div>
+        </div>
+    </div>
+    """
 
-# Ana İki Sütunlu Ekran
-sol_panel, sag_panel = st.columns([1.05, 1.35], gap="large")
+
+# Üst Kurumsal Banner
+st.markdown(
+    """
+    <div class="ust-banner">
+        <h1>💧 Kaçak Su Risk Analiz ve Saha Öncelik Paneli</h1>
+        <p>Abone tüketim profili, sayaç yaşı ve abone tipine göre kaçak şüphe skorunu anlık puanlayan saha karar destek ekranı</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+sol_panel, sag_panel = st.columns([1.02, 1.38], gap="large")
 
 girdiler = {}
 secilen_etiketler = {}
 
 with sol_panel:
-    st.subheader("1. Abone ve Tüketim Bilgileri")
+    st.subheader("1. Abone Bilgileri ve Hazır Senaryolar")
 
     col_s1, col_s2, col_s3 = st.columns(3)
     if col_s1.button("🔴 Yüksek Risk", use_container_width=True):
@@ -214,10 +304,10 @@ with sol_panel:
             girdiler[col] = val
             secilen_etiketler[col] = val
 
-    tahmin_basildi = st.button("🔍 Risk Skorunu Hesapla", type="primary", use_container_width=True)
+    tahmin_basildi = st.button("🚀 Risk Skorunu Hesapla", type="primary", use_container_width=True)
 
 with sag_panel:
-    st.subheader("2. Risk Değerlendirmesi ve Tüketim Görünümü")
+    st.subheader("2. Risk Değerlendirmesi ve Saha Görünümü")
 
     tam_satir = varsayilan_satir_olustur()
     tam_satir.update(girdiler)
@@ -226,13 +316,28 @@ with sag_panel:
 
     if olas >= yuksek_esik:
         risk_etiket = "Yüksek Risk"
-        aksiyon = "Öncelikli saha denetimi, sayaç bağlantısı ve tüketim geçmişi incelemesi önerilir."
+        rozet_html = '<span class="rozet-yuksek">● YÜKSEK RİSK</span>'
+        aksiyon = "Öncelikli saha denetimi, sayaç bağlantısı ve hat/mühür kontrolü önerilir."
+        kontrol_maddeleri = [
+            "Sayaç önü bağlantı ve by-pass / hat müdahalesi kontrolü",
+            "Sayaç camı, mühür ve fiziksel hasar incelemesi",
+            "Son 12 aylık dönemlik tüketim dalgalanmasının sahada doğrulanması",
+        ]
     elif olas >= orta_esik:
         risk_etiket = "Orta Risk"
-        aksiyon = "İzleme listesine alınıp saha kapasitesine göre ikincil kontrol planlanabilir."
+        rozet_html = '<span class="rozet-orta">● ORTA RİSK</span>'
+        aksiyon = "İzleme listesine alınıp saha ekibi kapasitesine göre ikincil kontrol planlanabilir."
+        kontrol_maddeleri = [
+            "Önümüzdeki okuma döneminde tüketim artış/azalış takibi",
+            "Sayaç yaşı ve tipi dikkate alınarak rutin kontrol sırasına ekleme",
+        ]
     else:
         risk_etiket = "Düşük Risk"
+        rozet_html = '<span class="rozet-dusuk">● DÜŞÜK RİSK</span>'
         aksiyon = "Ek saha müdahalesi gerektirmeyen olağan tüketim profili."
+        kontrol_maddeleri = [
+            "Olağan periyodik sayaç okuma ve faturalandırma akışı sürdürülür",
+        ]
 
     if tahmin_basildi:
         st.session_state["sorgu_gecmisi"].insert(
@@ -243,40 +348,25 @@ with sag_panel:
                 "Sayaç Yaşı": secilen_etiketler.get("sayac_yasi", "-"),
                 "Yaz (m³)": secilen_etiketler.get("tuketim_yaz_m3", "-"),
                 "Kış (m³)": secilen_etiketler.get("tuketim_kis_m3", "-"),
-                "Risk Olasılığı (%)": round(olas * 100, 1),
-                "Risk Seviyesi": risk_etiket,
+                "Risk (%)": round(olas * 100, 1),
+                "Kademe": risk_etiket,
             },
         )
 
     m1, m2, m3 = st.columns(3)
-    m1.metric("Kaçak Şüphe Olasılığı", f"%{olas * 100:.1f}")
-    m2.metric("Risk Kademesi", risk_etiket)
+    m1.metric("Kaçak Şüphe Skoru", f"%{olas * 100:.1f}")
+    m2.metric("Yüksek Risk Eşiği", f"%{yuksek_esik * 100:.0f}")
     m3.metric("Sayaç Yaşı", f"{girdiler.get('sayac_yasi', 0)} yıl")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.progress(min(max(olas, 0.0), 1.0))
+    st.markdown(f"<div style='margin: 0.5rem 0 0.25rem 0;'>{rozet_html}</div>", unsafe_allow_html=True)
+    st.markdown(risk_skala_html(olas, orta_esik, yuksek_esik), unsafe_allow_html=True)
 
-    if risk_etiket == "Yüksek Risk":
-        st.error(f"🔴 **YÜKSEK RİSK** — {aksiyon}")
-    elif risk_etiket == "Orta Risk":
-        st.warning(f"🟡 **ORTA RİSK** — {aksiyon}")
-    else:
-        st.success(f"🟢 **DÜŞÜK RİSK** — {aksiyon}")
+    st.info(f"**Saha Önerisi:** {aksiyon}")
 
-    notlar = []
-    if float(girdiler.get("tuketim_yaz_m3", 99)) < 8.0:
-        notlar.append(f"Yaz tüketimi düşük ({girdiler['tuketim_yaz_m3']} m³)")
-    if float(girdiler.get("tuketim_kis_m3", 99)) < 6.0:
-        notlar.append(f"Kış tüketimi düşük ({girdiler['tuketim_kis_m3']} m³)")
-    if float(girdiler.get("sayac_yasi", 0)) >= 12:
-        notlar.append(f"Sayaç yaşı yüksek ({girdiler['sayac_yasi']} yıl)")
-    if girdiler.get("sayac_tipi") == SAYAC_TIPI_MAP.get("Mekanik"):
-        notlar.append("Mekanik sayaç")
-    if girdiler.get("abone_tipi") == ABONE_TIPI_MAP.get("Tarım-Hayvancılık"):
-        notlar.append("Tarım-Hayvancılık grubu")
-
-    if notlar:
-        st.caption("**Öne çıkan sinyaller:** " + " • ".join(notlar))
+    with st.container(border=True):
+        st.markdown("**Saha Kontrol Odakları**")
+        for madde in kontrol_maddeleri:
+            st.markdown(f"- {madde}")
 
     st.markdown("**Dönemsel Tüketim Profil Kıyaslaması (m³)**")
     df_kiyas = pd.DataFrame(
@@ -301,7 +391,6 @@ with sag_panel:
     with st.expander("Modele gönderilen sayısal kod ve girdi özeti"):
         st.json({ETIKETLER.get(k, k): v for k, v in girdiler.items()})
 
-# Alt Bölüm: Sunum Sorgu Geçmişi ve Dışa Aktarma
 if st.session_state["sorgu_gecmisi"]:
     st.divider()
     gecmis_bas, gecmis_but = st.columns([3, 1])
@@ -323,3 +412,12 @@ if st.session_state["sorgu_gecmisi"]:
         file_name="kacak_risk_sorgu_gecmisi.csv",
         mime="text/csv",
     )
+
+st.markdown(
+    """
+    <div class="alt-bilgi">
+        Karar Destek Modeli: Random Forest Sınıflandırıcı • Test ROC-AUC: 0.92 • Canlı Eşik ve Saha Önceliklendirme Ekranı
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
