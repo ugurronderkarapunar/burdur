@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 import streamlit as st
 from streamlit_folium import st_folium
 
-# scikit-learn 1.6.1 ile kaydedilmiş pipeline için uyumluluk yaması
 import sklearn.compose._column_transformer as _ct
 
 if not hasattr(_ct, "_RemainderColsList"):
@@ -290,4 +289,93 @@ pipe = paket["pipeline"]
 beklenen_sutunlar = paket["ozellik_sutunlari"]
 ornek_degerler = paket.get("ornek_degerler", {})
 yuksek_esik = float(paket.get("esik", 0.62))
-orta_esik = float(paket.get("
+orta_esik = float(paket.get("orta_risk_esigi", 0.25))
+test_f1 = float(paket.get("test_f1", 0.6740))
+
+if "sorgu_gecmisi" not in st.session_state:
+    st.session_state["sorgu_gecmisi"] = []
+
+
+def varsayilan_satir_olustur() -> dict:
+    satir = {}
+    for col in beklenen_sutunlar:
+        meta = ornek_degerler.get(col)
+        if meta and meta.get("tip") == "kat":
+            secenekler = meta.get("secenekler", [])
+            satir[col] = secenekler[0] if secenekler else ""
+        elif meta and meta.get("tip") == "num":
+            val = meta.get("medyan", 0)
+            satir[col] = int(round(val)) if meta.get("is_int") else round(float(val), 2)
+        else:
+            satir[col] = 0
+    return satir
+
+
+def senaryo_uygula(kis: float, hane: int, yaz: float, yas: int, abone_adaylari: list[str]):
+    st.session_state["tuketim_kis_m3"] = kis
+    st.session_state["hane_buyuklugu"] = hane
+    st.session_state["tuketim_yaz_m3"] = yaz
+    st.session_state["sayac_yasi"] = yas
+
+    kat_meta = ornek_degerler.get("abone_tipi", {})
+    secenekler = [str(x) for x in kat_meta.get("secenekler", [])]
+    if secenekler:
+        for aday in abone_adaylari:
+            if aday in secenekler:
+                st.session_state["abone_tipi"] = aday
+                break
+        else:
+            st.session_state["abone_tipi"] = secenekler[0]
+
+
+def folium_ilce_haritasi(ilce_adi: str, olas_val: float, risk_etiket: str) -> folium.Map:
+    varsayilan_koord = (37.7203, 30.2908)
+    koord_bulundu = False
+
+    if ilce_adi in ILCE_KOORDINATLARI:
+        lat, lon = ILCE_KOORDINATLARI[ilce_adi]
+        koord_bulundu = True
+    else:
+        for k, v in ILCE_KOORDINATLARI.items():
+            if k.lower() == str(ilce_adi).strip().lower():
+                lat, lon = v
+                koord_bulundu = True
+                break
+        if not koord_bulundu:
+            lat, lon = varsayilan_koord
+
+    renk = "#dc2626" if olas_val >= yuksek_esik else ("#d97706" if olas_val >= orta_esik else "#16a34a")
+    m = folium.Map(location=[lat, lon], zoom_start=11 if koord_bulundu else 9, tiles="CartoDB positron")
+    popup_html = f"<b>İlçe:</b> {ilce_adi}<br><b>Risk Skoru:</b> %{olas_val * 100:.1f}<br><b>Kademe:</b> {risk_etiket}"
+
+    folium.Circle(location=[lat, lon], radius=3500, color=renk, fill=True, fill_color=renk, fill_opacity=0.22, weight=2).add_to(m)
+    folium.Marker(
+        location=[lat, lon],
+        popup=folium.Popup(popup_html, max_width=240),
+        tooltip=f"{ilce_adi} • %{olas_val * 100:.1f} ({risk_etiket})",
+        icon=folium.Icon(color="red" if olas_val >= yuksek_esik else ("orange" if olas_val >= orta_esik else "green"), icon="tint", prefix="fa"),
+    ).add_to(m)
+
+    return m
+
+
+def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> go.Figure:
+    pct = round(min(max(olas_val * 100.0, 0.0), 100.0), 1)
+    orta_pct = round(min(max(orta_val * 100.0, 1.0), 95.0), 1)
+    yuksek_pct = round(min(max(yuksek_val * 100.0, orta_pct + 2.0), 99.0), 1)
+
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=pct,
+            number={"suffix": "%", "font": {"size": 30, "color": "#0f172a"}},
+            title={"text": "Kaçak Şüphe Olasılığı", "font": {"size": 14, "color": "#0f172a"}},
+            gauge={
+                "axis": {"range": [0, 100], "ticksuffix": "%", "tickfont": {"size": 11, "color": "#334155"}},
+                "bar": {"color": "#0b1f3a", "thickness": 0.28},
+                "bgcolor": "#ffffff",
+                "borderwidth": 1,
+                "bordercolor": "#cbd5e1",
+                "steps": [
+                    {"range": [0, orta_pct], "color": "#dcfce7"},
+                    {"range
