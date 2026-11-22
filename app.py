@@ -22,216 +22,67 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-        html, body, [class*="css"], .stApp {
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #eef2f6 !important;
-            color: #0f172a !important;
-        }
         .block-container {
             padding-top: 1.2rem;
-            padding-bottom: 2.4rem;
-            max-width: 1360px;
+            padding-bottom: 2.2rem;
+            max-width: 1300px;
         }
-
-        /* Streamlit form ve etiket okunabilirliği */
-        label, .stMarkdown, .stText, p, span, div {
-            color: #0f172a;
-        }
-        div[data-testid="stWidgetLabel"] label,
-        div[data-testid="stWidgetLabel"] p {
-            color: #0f172a !important;
-            font-weight: 700 !important;
-            font-size: 0.9rem !important;
-        }
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="input"] > div,
-        input[type="number"] {
-            background-color: #ffffff !important;
-            color: #0f172a !important;
-            border-color: #cbd5e1 !important;
-        }
-        button[kind="secondary"] {
-            background-color: #ffffff !important;
-            color: #0f172a !important;
-            border: 1px solid #cbd5e1 !important;
-            font-weight: 700 !important;
-        }
-        button[kind="secondary"]:hover {
-            background-color: #f8fafc !important;
-            border-color: #0f4c64 !important;
-            color: #0f172a !important;
-        }
-        button[kind="primary"] {
-            background: linear-gradient(120deg, #0b1f3a 0%, #0e7490 100%) !important;
-            color: #ffffff !important;
-            border: none !important;
-            font-weight: 700 !important;
-        }
-        button[kind="primary"] p,
-        button[kind="primary"] span {
-            color: #ffffff !important;
-        }
-
-        /* Üst Banner */
-        .hero-card {
-            background: linear-gradient(125deg, #0b1f3a 0%, #0f4c64 55%, #0e7490 100%);
-            border-radius: 18px;
-            padding: 1.45rem 1.8rem;
-            color: #ffffff !important;
-            box-shadow: 0 12px 28px rgba(11, 31, 58, 0.16);
-            margin-bottom: 1.1rem;
-        }
-        .hero-badge {
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.18);
-            color: #ffffff !important;
-            font-size: 0.76rem;
-            font-weight: 700;
-            padding: 0.25rem 0.72rem;
-            border-radius: 999px;
-            margin-bottom: 0.5rem;
-            letter-spacing: 0.03em;
-        }
-        .hero-title {
-            font-size: 1.7rem;
-            font-weight: 800;
-            margin: 0 0 0.28rem 0;
-            line-height: 1.2;
-            color: #ffffff !important;
-        }
-        .hero-sub {
-            font-size: 0.95rem;
-            color: #f0f9ff !important;
-            margin: 0;
-        }
-
-        /* KPI Kartları */
-        .kpi-card {
-            background: #ffffff !important;
-            border: 1px solid #dbe3ee;
+        .ust-banner {
+            background: linear-gradient(120deg, #0f2942 0%, #155e75 65%, #0e7490 100%);
+            color: #ffffff;
+            padding: 1.3rem 1.6rem;
             border-radius: 14px;
-            padding: 0.95rem 1.1rem;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+            margin-bottom: 1.1rem;
+            box-shadow: 0 8px 24px rgba(15, 41, 66, 0.14);
         }
-        .kpi-label {
-            font-size: 0.76rem;
-            font-weight: 700;
-            color: #475569 !important;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 0.25rem;
+        .ust-banner h1 {
+            color: #ffffff !important;
+            font-size: 1.65rem !important;
+            margin: 0 0 0.25rem 0 !important;
+            font-weight: 700 !important;
         }
-        .kpi-value {
-            font-size: 1.45rem;
-            font-weight: 800;
-            color: #0f172a !important;
-            line-height: 1.15;
+        .ust-banner p {
+            color: #e0f2fe !important;
+            margin: 0 !important;
+            font-size: 0.95rem !important;
         }
-        .kpi-hint {
-            font-size: 0.8rem;
-            color: #475569 !important;
-            margin-top: 0.25rem;
-        }
-
-        /* Panel Kartları */
-        .panel-card {
-            background: #ffffff !important;
-            border: 1px solid #dbe3ee;
-            border-radius: 16px;
-            padding: 1.25rem 1.35rem;
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-            margin-bottom: 1rem;
-        }
-        .panel-title {
-            font-size: 1.06rem;
-            font-weight: 800;
-            color: #0f172a !important;
-            margin: 0 0 0.85rem 0;
-        }
-
-        /* Karar Kartları */
-        .karar-yuksek {
-            background: #fff5f5 !important;
-            border-left: 5px solid #dc2626;
-            border-top: 1px solid #fecaca;
-            border-right: 1px solid #fecaca;
-            border-bottom: 1px solid #fecaca;
-            border-radius: 12px;
-            padding: 0.95rem 1.1rem;
-        }
-        .karar-orta {
-            background: #fffbeb !important;
-            border-left: 5px solid #d97706;
-            border-top: 1px solid #fde68a;
-            border-right: 1px solid #fde68a;
-            border-bottom: 1px solid #fde68a;
-            border-radius: 12px;
-            padding: 0.95rem 1.1rem;
-        }
-        .karar-dusuk {
-            background: #f0fdf4 !important;
-            border-left: 5px solid #16a34a;
-            border-top: 1px solid #bbf7d0;
-            border-right: 1px solid #bbf7d0;
-            border-bottom: 1px solid #bbf7d0;
-            border-radius: 12px;
-            padding: 0.95rem 1.1rem;
-        }
-        .karar-baslik {
-            font-weight: 800;
-            color: #0f172a !important;
-            margin-bottom: 0.25rem;
-            font-size: 0.95rem;
-        }
-        .karar-metin {
-            font-size: 0.9rem;
-            color: #1e293b !important;
-            line-height: 1.45;
-        }
-
-        /* Rozetler */
         .rozet-yuksek {
             display: inline-block;
-            background-color: #fee2e2 !important;
-            color: #7f1d1d !important;
-            border: 1px solid #f87171;
-            padding: 0.32rem 0.85rem;
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+            padding: 0.32rem 0.78rem;
             border-radius: 999px;
-            font-weight: 800;
-            font-size: 0.84rem;
+            font-weight: 700;
+            font-size: 0.88rem;
         }
         .rozet-orta {
             display: inline-block;
-            background-color: #fef3c7 !important;
-            color: #78350f !important;
-            border: 1px solid #fbbf24;
-            padding: 0.32rem 0.85rem;
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+            padding: 0.32rem 0.78rem;
             border-radius: 999px;
-            font-weight: 800;
-            font-size: 0.84rem;
+            font-weight: 700;
+            font-size: 0.88rem;
         }
         .rozet-dusuk {
             display: inline-block;
-            background-color: #dcfce7 !important;
-            color: #14532d !important;
-            border: 1px solid #4ade80;
-            padding: 0.32rem 0.85rem;
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+            padding: 0.32rem 0.78rem;
             border-radius: 999px;
-            font-weight: 800;
-            font-size: 0.84rem;
+            font-weight: 700;
+            font-size: 0.88rem;
         }
-
-        .footer-bar {
-            margin-top: 1.2rem;
-            padding: 0.9rem 1.2rem;
-            border-radius: 12px;
-            background-color: #ffffff !important;
-            border: 1px solid #dbe3ee;
-            color: #334155 !important;
-            font-size: 0.85rem;
-            font-weight: 600;
+        .alt-bilgi {
+            margin-top: 1.5rem;
+            padding: 0.85rem 1.1rem;
+            border-radius: 10px;
+            background-color: #f1f5f9;
+            color: #334155;
+            font-size: 0.86rem;
             text-align: center;
         }
     </style>
@@ -263,14 +114,6 @@ REFERANS_TUKETIM = {
     "riskli_kis": 5.9,
     "riskli_yaz": 8.3,
 }
-
-OZELLIK_ETKI_OZETI = [
-    ("Kış Tüketimi", 0.337),
-    ("Hane Büyüklüğü", 0.220),
-    ("Yaz Tüketimi", 0.062),
-    ("Sayaç Yaşı", 0.017),
-    ("Abone Tipi (Tarım-Hayv.)", 0.012),
-]
 
 
 @st.cache_resource
@@ -336,14 +179,14 @@ def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> 
         go.Indicator(
             mode="gauge+number",
             value=pct,
-            number={"suffix": "%", "font": {"size": 30, "color": "#0f172a"}},
-            title={"text": "Kaçak Şüphe Olasılığı", "font": {"size": 14, "color": "#0f172a"}},
+            number={"suffix": "%", "font": {"size": 28, "color": "#0f172a"}},
+            title={"text": "Kaçak Şüphe Skoru", "font": {"size": 14, "color": "#334155"}},
             gauge={
-                "axis": {"range": [0, 100], "ticksuffix": "%", "tickfont": {"size": 11, "color": "#334155"}},
-                "bar": {"color": "#0b1f3a", "thickness": 0.28},
+                "axis": {"range": [0, 100], "ticksuffix": "%", "tickfont": {"size": 11}},
+                "bar": {"color": "#0f2942", "thickness": 0.28},
                 "bgcolor": "#ffffff",
                 "borderwidth": 1,
-                "bordercolor": "#cbd5e1",
+                "bordercolor": "#e2e8f0",
                 "steps": [
                     {"range": [0, orta_pct], "color": "#dcfce7"},
                     {"range": [orta_pct, yuksek_pct], "color": "#fef3c7"},
@@ -358,10 +201,9 @@ def powerbi_risk_kadran(olas_val: float, orta_val: float, yuksek_val: float) -> 
         )
     )
     fig.update_layout(
-        height=235,
-        margin=dict(l=18, r=18, t=38, b=8),
+        height=230,
+        margin=dict(l=20, r=20, t=38, b=10),
         paper_bgcolor="#ffffff",
-        font=dict(color="#0f172a"),
     )
     return fig
 
@@ -380,19 +222,17 @@ def powerbi_tuketim_grafigi(kis_val: float, yaz_val: float) -> go.Figure:
             y=girilen,
             text=[f"{v:.1f} m³" for v in girilen],
             textposition="outside",
-            textfont=dict(color="#0f172a", size=12),
-            marker=dict(color="#1d4ed8", cornerradius=6),
+            marker_color="#1d4ed8",
         )
     )
     fig.add_trace(
         go.Bar(
-            name="Normal Profil",
+            name="Normal Profil (Medyan)",
             x=donemler,
             y=normal,
             text=[f"{v:.1f} m³" for v in normal],
             textposition="outside",
-            textfont=dict(color="#0f172a", size=12),
-            marker=dict(color="#059669", cornerradius=6),
+            marker_color="#059669",
         )
     )
     fig.add_trace(
@@ -402,12 +242,11 @@ def powerbi_tuketim_grafigi(kis_val: float, yaz_val: float) -> go.Figure:
             y=riskli,
             text=[f"{v:.1f} m³" for v in riskli],
             textposition="outside",
-            textfont=dict(color="#0f172a", size=12),
-            marker=dict(color="#dc2626", cornerradius=6),
+            marker_color="#dc2626",
         )
     )
 
-    max_y = max(girilen + normal + riskli) * 1.24
+    max_y = max(girilen + normal + riskli) * 1.22
     fig.update_layout(
         title=dict(
             text="Dönemsel Tüketim Kıyaslaması (m³)",
@@ -415,139 +254,52 @@ def powerbi_tuketim_grafigi(kis_val: float, yaz_val: float) -> go.Figure:
             x=0.0,
         ),
         barmode="group",
-        bargap=0.26,
+        bargap=0.24,
         bargroupgap=0.08,
-        height=295,
-        margin=dict(l=12, r=12, t=46, b=12),
+        height=310,
+        margin=dict(l=15, r=15, t=48, b=15),
         paper_bgcolor="#ffffff",
         plot_bgcolor="#ffffff",
-        font=dict(color="#0f172a"),
         yaxis=dict(
             range=[0, max(max_y, 5.0)],
             showgrid=True,
             gridcolor="#e2e8f0",
-            title=dict(text="Tüketim (m³)", font=dict(color="#0f172a")),
-            tickfont=dict(color="#334155"),
+            gridwidth=1,
+            title="Tüketim (m³)",
         ),
-        xaxis=dict(showgrid=False, tickfont=dict(color="#0f172a")),
+        xaxis=dict(showgrid=False),
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
             xanchor="right",
             x=1.0,
-            font=dict(size=11, color="#0f172a"),
+            font=dict(size=11),
         ),
     )
     return fig
 
 
-def powerbi_etki_grafigi() -> go.Figure:
-    sirali = list(reversed(OZELLIK_ETKI_OZETI))
-    isimler = [x[0] for x in sirali]
-    degerler = [x[1] for x in sirali]
-
-    fig = go.Figure(
-        go.Bar(
-            x=degerler,
-            y=isimler,
-            orientation="h",
-            text=[f"+{v:.3f}" for v in degerler],
-            textposition="outside",
-            textfont=dict(color="#0f172a", size=12),
-            marker=dict(color="#0e7490", cornerradius=6),
-        )
-    )
-    fig.update_layout(
-        title=dict(
-            text="Modelde Kararı Etkileyen Başlıca Sinyaller (ΔF1)",
-            font=dict(size=14, color="#0f172a"),
-            x=0.0,
-        ),
-        height=230,
-        margin=dict(l=10, r=46, t=38, b=10),
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#ffffff",
-        font=dict(color="#0f172a"),
-        xaxis=dict(
-            range=[0, max(degerler) * 1.24],
-            showgrid=True,
-            gridcolor="#e2e8f0",
-            title=dict(text="Test F1 Katkısı", font=dict(color="#0f172a")),
-            tickfont=dict(color="#334155"),
-        ),
-        yaxis=dict(showgrid=False, tickfont=dict(color="#0f172a")),
-    )
-    return fig
-
-
-# Hero Banner
+# Üst Kurumsal Banner
 st.markdown(
-    """
-    <div class="hero-card">
-        <div class="hero-badge">SAHA KARAR DESTEK SİSTEMİ</div>
-        <h1 class="hero-title">💧 Kaçak Su Risk Analiz ve Önceliklendirme Paneli</h1>
-        <p class="hero-sub">Tüketim davranışı, hane büyüklüğü ve sayaç göstergelerini analiz ederek yüksek şüpheli aboneleri önceliklendirir</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Üst KPI Şeridi
-k1, k2, k3, k4 = st.columns(4, gap="medium")
-k1.markdown(
     f"""
-    <div class="kpi-card">
-        <div class="kpi-label">Karar Eşiği</div>
-        <div class="kpi-value">%{yuksek_esik * 100:.0f}</div>
-        <div class="kpi-hint">Yüksek öncelikli saha barajı</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-k2.markdown(
-    f"""
-    <div class="kpi-card">
-        <div class="kpi-label">Test F1 Skoru</div>
-        <div class="kpi-value">{test_f1:.4f}</div>
-        <div class="kpi-hint">Doğrulanmış Random Forest modeli</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-k3.markdown(
-    """
-    <div class="kpi-card">
-        <div class="kpi-label">Birincil Sinyal</div>
-        <div class="kpi-value">Kış & Hane</div>
-        <div class="kpi-hint">En yüksek ayrım gücü sağlayan ikili</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-k4.markdown(
-    """
-    <div class="kpi-card">
-        <div class="kpi-label">Operasyon Modu</div>
-        <div class="kpi-value">Canlı Puanlama</div>
-        <div class="kpi-hint">Anlık risk skoru ve saha önerisi</div>
+    <div class="ust-banner">
+        <h1>💧 Kaçak Su Risk Analiz ve Saha Öncelik Paneli</h1>
+        <p>Kış/yaz tüketimi, hane büyüklüğü ve sayaç sinyalleriyle kaçak şüphesini puanlayan karar destek paneli • Karar Eşiği: %{yuksek_esik*100:.0f} • Test F1: {test_f1:.4f}</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-st.markdown("<div style='height:0.65rem;'></div>", unsafe_allow_html=True)
-
-sol_panel, sag_panel = st.columns([0.96, 1.44], gap="large")
+sol_panel, sag_panel = st.columns([1.0, 1.42], gap="large")
 
 girdiler = {}
 secilen_etiketler = {}
 
 with sol_panel:
-    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">1. Abone Bilgileri ve Hazır Senaryolar</div>', unsafe_allow_html=True)
+    st.subheader("1. Kritik Abone Girdileri ve Senaryolar")
 
-    col_s1, col_s2, col_s3 = st.columns(3, gap="small")
+    col_s1, col_s2, col_s3 = st.columns(3)
     if col_s1.button("🔴 Yüksek Risk", use_container_width=True):
         senaryo_uygula(1.5, 6, 3.0, 17, ["Tarım-Hayvancılık", "Sanayi", "İşyeri"])
 
@@ -557,7 +309,7 @@ with sol_panel:
     if col_s3.button("🟢 Düşük Risk", use_container_width=True):
         senaryo_uygula(13.0, 3, 17.5, 3, ["Konut"])
 
-    st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
     for col in ONEMLI_5_SUTUN:
         if col not in beklenen_sutunlar:
@@ -566,13 +318,13 @@ with sol_panel:
         meta = ornek_degerler.get(col, {})
 
         if col == "abone_tipi":
-            secenekler = [
-                str(x)
-                for x in (
-                    meta.get("secenekler")
-                    or ["Konut", "Tarım-Hayvancılık", "İşyeri", "Resmi", "Sanayi"]
-                )
-            ]
+            secenekler = [str(x) for x in meta.get("secenekler") or [
+                "Konut",
+                "Tarım-Hayvancılık",
+                "İşyeri",
+                "Resmi",
+                "Sanayi",
+            ]]
             mevcut = str(st.session_state.get(col, secenekler[0]))
             idx = secenekler.index(mevcut) if mevcut in secenekler else 0
             secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
@@ -580,7 +332,9 @@ with sol_panel:
             secilen_etiketler[col] = secilen
 
         elif meta.get("tip") == "kat":
-            secenekler = [str(x) for x in meta.get("secenekler", [])] or ["Varsayılan"]
+            secenekler = [str(x) for x in meta.get("secenekler", [])]
+            if not secenekler:
+                secenekler = ["Varsayılan"]
             mevcut = str(st.session_state.get(col, secenekler[0]))
             idx = secenekler.index(mevcut) if mevcut in secenekler else 0
             secilen = st.selectbox(baslik, options=secenekler, index=idx, key=f"inp_{col}")
@@ -616,11 +370,11 @@ with sol_panel:
             girdiler[col] = val
             secilen_etiketler[col] = val
 
-    st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
     tahmin_basildi = st.button("🚀 Risk Skorunu Hesapla", type="primary", use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with sag_panel:
+    st.subheader("2. Risk Değerlendirmesi ve Tüketim Görünümü")
+
     tam_satir = varsayilan_satir_olustur()
     tam_satir.update(girdiler)
     df_model = pd.DataFrame([tam_satir])[beklenen_sutunlar]
@@ -628,27 +382,24 @@ with sag_panel:
 
     if olas >= yuksek_esik:
         risk_etiket = "Yüksek Risk"
-        rozet_html = '<span class="rozet-yuksek">● YÜKSEK RİSK — ÖNCELİKLİ SAHA</span>'
-        karar_class = "karar-yuksek"
+        rozet_html = '<span class="rozet-yuksek">● YÜKSEK RİSK</span>'
         aksiyon = "Öncelikli saha denetimi, sayaç bağlantısı ve hat/mühür kontrolü önerilir."
         kontrol_maddeleri = [
-            "Düşük kış/yaz tüketimi ve hane büyüklüğü uyumsuzluğunun yerinde kontrolü",
+            "Düşük kış/yaz tüketimi ve hane büyüklüğü uyumsuzluğunun sahada kontrolü",
             "Sayaç önü bağlantı, mühür ve olası by-pass / hat müdahalesi incelemesi",
-            "Sayaç yaşı ve abone grubu dikkate alınarak sahada tüketim doğrulaması",
+            "Sayaç yaşı ve abone grubu dikkate alınarak yerinde ölçüm doğrulaması",
         ]
     elif olas >= orta_esik:
         risk_etiket = "Orta Risk"
-        rozet_html = '<span class="rozet-orta">● ORTA RİSK — İZLEME LİSTESİ</span>'
-        karar_class = "karar-orta"
+        rozet_html = '<span class="rozet-orta">● ORTA RİSK</span>'
         aksiyon = "İzleme listesine alınıp saha ekibi kapasitesine göre ikincil kontrol planlanabilir."
         kontrol_maddeleri = [
-            "Önümüzdeki okuma döneminde tüketim ve hane profili sapmasının takibi",
-            "Sayaç yaşı ve abone tipine göre rutin kontrol planına dahil etme",
+            "Önümüzdeki okuma döneminde tüketim ve hane profili değişiminin izlenmesi",
+            "Sayaç yaşı ve abone tipine göre rutin kontrol sırasına ekleme",
         ]
     else:
         risk_etiket = "Düşük Risk"
-        rozet_html = '<span class="rozet-dusuk">● DÜŞÜK RİSK — OLAĞAN PROFİL</span>'
-        karar_class = "karar-dusuk"
+        rozet_html = '<span class="rozet-dusuk">● DÜŞÜK RİSK</span>'
         aksiyon = "Ek saha müdahalesi gerektirmeyen olağan tüketim profili."
         kontrol_maddeleri = [
             "Olağan periyodik sayaç okuma ve faturalandırma akışı sürdürülür",
@@ -668,9 +419,57 @@ with sag_panel:
             },
         )
 
-    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">2. Risk Skoru ve Saha Karar Özeti</div>', unsafe_allow_html=True)
-
-    g_sol, g_sag = st.columns([0.92, 1.28], gap="medium")
+    g_sol, g_sag = st.columns([0.9, 1.2], gap="medium")
     with g_sol:
-        st.plotly_chart(powerbi_risk_kadran(olas, orta_esik, yuksek_esik), use_
+        st.plotly_chart(powerbi_risk_kadran(olas, orta_esik, yuksek_esik), use_container_width=True)
+        st.markdown(f"<div style='text-align:center;'>{rozet_html}</div>", unsafe_allow_html=True)
+    with g_sag:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.info(f"**Saha Önerisi:** {aksiyon}")
+        with st.container(border=True):
+            st.markdown("**Saha Kontrol Odakları**")
+            for madde in kontrol_maddeleri:
+                st.markdown(f"- {madde}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.plotly_chart(
+        powerbi_tuketim_grafigi(
+            float(girdiler.get("tuketim_kis_m3", 0)),
+            float(girdiler.get("tuketim_yaz_m3", 0)),
+        ),
+        use_container_width=True,
+    )
+
+    with st.expander("Modele gönderilen 5 temel değişken"):
+        st.json({ETIKETLER.get(k, k): v for k, v in girdiler.items()})
+
+if st.session_state["sorgu_gecmisi"]:
+    st.divider()
+    gecmis_bas, gecmis_but = st.columns([3, 1])
+    with gecmis_bas:
+        st.subheader("3. Sunum Sorgu Geçmişi")
+    with gecmis_but:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🗑️ Geçmişi Temizle", use_container_width=True):
+            st.session_state["sorgu_gecmisi"] = []
+            st.rerun()
+
+    df_gecmis = pd.DataFrame(st.session_state["sorgu_gecmisi"])
+    st.dataframe(df_gecmis, use_container_width=True, hide_index=True)
+
+    csv_bytes = df_gecmis.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="⬇️ Sorgu Geçmişini CSV İndir",
+        data=csv_bytes,
+        file_name="kacak_risk_sorgu_gecmisi.csv",
+        mime="text/csv",
+    )
+
+st.markdown(
+    f"""
+    <div class="alt-bilgi">
+        Karar Destek Modeli: Random Forest Sınıflandırıcı • Test F1: {test_f1:.4f} • Yüksek Risk Eşiği: %{yuksek_esik*100:.0f}
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
