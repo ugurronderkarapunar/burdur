@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# scikit-learn 1.6.1 ile kaydedilmiş pipeline için güvenlik yaması
+# scikit-learn 1.6.1 ile kaydedilmiş pipeline için uyumluluk yaması
 import sklearn.compose._column_transformer as _ct
 
 if not hasattr(_ct, "_RemainderColsList"):
@@ -91,15 +91,16 @@ def varsayilan_satir_olustur() -> dict:
 st.title("💧 Hızlı Kaçak Su Risk Tahmini")
 st.caption("En kritik 5 bilgiyi girin; kayıtlı yapay zekâ modeli kaçak riskini anında hesaplasın.")
 
+# Hazır senaryo butonları
 col_s1, col_s2 = st.columns(2)
-if col_s1.button("🔴 Yüksek Riskli Örnek Doldur"):
+if col_s1.button("🔴 Yüksek Riskli Örnek Doldur", use_container_width=True):
     st.session_state["tuketim_yaz_m3"] = 4.5
     st.session_state["tuketim_kis_m3"] = 3.0
     st.session_state["sayac_yasi"] = 16
     st.session_state["abone_tipi"] = "Tarım-Hayvancılık"
     st.session_state["sayac_tipi"] = "Mekanik"
 
-if col_s2.button("🟢 Düşük Riskli Örnek Doldur"):
+if col_s2.button("🟢 Düşük Riskli Örnek Doldur", use_container_width=True):
     st.session_state["tuketim_yaz_m3"] = 16.0
     st.session_state["tuketim_kis_m3"] = 12.0
     st.session_state["sayac_yasi"] = 3
@@ -163,11 +164,41 @@ if st.button("Tahmin Et", type="primary", use_container_width=True):
     olas = float(pipe.predict_proba(df_model)[:, 1][0])
 
     st.divider()
-    st.metric("Kaçak Şüphe Olasılığı", f"%{olas * 100:.1f}")
+
+    col_m1, col_m2 = st.columns([1, 2])
+    with col_m1:
+        st.metric("Kaçak Şüphe Olasılığı", f"%{olas * 100:.1f}")
+    with col_m2:
+        st.write("**Risk Seviyesi Çubuğu**")
+        st.progress(min(max(olas, 0.0), 1.0))
+        st.caption(f"Yüksek risk eşiği: %{yuksek_esik * 100:.0f} | Orta risk sınırı: %{orta_esik * 100:.0f}")
 
     if olas >= yuksek_esik:
         st.error("🔴 YÜKSEK RİSK — Saha denetimine öncelikli alınmalı.")
+        aksiyon = "Öncelikli saha kontrolü, sayaç bağlantısı ve tüketim geçmişi incelemesi önerilir."
     elif olas >= orta_esik:
-        st.warning("🟡 ORTA RİSK — Tüketim takibi ve kontrol önerilir.")
+        st.warning("🟡 ORTA RİSK — Tüketim takibi ve ikincil kontrol önerilir.")
+        aksiyon = "Önümüzdeki dönem tüketimini izleme listesine alıp kapasite doğduğunda kontrol edin."
     else:
         st.success("🟢 DÜŞÜK RİSK — Normal tüketim görünümü.")
+        aksiyon = "Ek saha müdahalesi gerektirmeyen olağan abone profili."
+
+    notlar = []
+    if girdiler.get("tuketim_yaz_m3", 99) < 8.0:
+        notlar.append(f"Yaz tüketimi düşük ({girdiler['tuketim_yaz_m3']} m³)")
+    if girdiler.get("tuketim_kis_m3", 99) < 6.0:
+        notlar.append(f"Kış tüketimi düşük ({girdiler['tuketim_kis_m3']} m³)")
+    if girdiler.get("sayac_yasi", 0) >= 12:
+        notlar.append(f"Sayaç yaşı yüksek ({girdiler['sayac_yasi']} yıl)")
+    if girdiler.get("sayac_tipi") == SAYAC_TIPI_MAP.get("Mekanik"):
+        notlar.append("Mekanik sayaç kullanılıyor")
+    if girdiler.get("abone_tipi") == ABONE_TIPI_MAP.get("Tarım-Hayvancılık"):
+        notlar.append("Tarım-Hayvancılık abone grubunda yer alıyor")
+
+    st.info(f"**Saha Önerisi:** {aksiyon}")
+    if notlar:
+        st.write("**Öne Çıkan Göstergeler:** " + " • ".join(notlar))
+
+    with st.expander("Modele gönderilen 5 temel değişkenin değerleri"):
+        ozet_girdi = {ETIKETLER.get(k, k): v for k, v in girdiler.items()}
+        st.json(ozet_girdi)
